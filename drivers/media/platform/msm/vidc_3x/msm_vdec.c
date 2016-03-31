@@ -620,6 +620,12 @@ static u32 get_frame_size_nv12_ubwc(int plane, u32 height, u32 width)
 	return VENUS_BUFFER_SIZE(COLOR_FMT_NV12_UBWC, width, height);
 }
 
+static u32 get_frame_size_compressed_full_yuv(int plane,
+					u32 max_mbs_per_frame, u32 size_per_mb)
+{
+	return (max_mbs_per_frame * size_per_mb * 3 / 2);
+}
+
 static u32 get_frame_size_compressed(int plane,
 					u32 max_mbs_per_frame, u32 size_per_mb)
 {
@@ -826,7 +832,7 @@ struct msm_vidc_format vdec_formats[] = {
 		.description = "VP9 compressed format",
 		.fourcc = V4L2_PIX_FMT_VP9,
 		.num_planes = 1,
-		.get_frame_size = get_frame_size_compressed,
+		.get_frame_size = get_frame_size_compressed_full_yuv,
 		.type = OUTPUT_PORT,
 	},
 	{
