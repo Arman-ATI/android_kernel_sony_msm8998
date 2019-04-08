@@ -755,7 +755,7 @@ static int get_timer_count_trap(struct pt_regs *regs, unsigned int instr)
 
 	if (rd == 15 || rn == 15)
 		return 1;
-	cval = arch_counter_get_cntvct();
+	cval = __arch_counter_get_cntvct_stable();
 	regs->uregs[rd] = cval;
 	regs->uregs[rn] = cval >> 32;
 	regs->ARM_pc += 4;
