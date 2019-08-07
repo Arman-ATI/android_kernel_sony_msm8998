@@ -677,6 +677,8 @@ static int qcom_smp2p_probe(struct platform_device *pdev)
 		goto unreg_ws;
 	}
 
+	enable_irq_wake(smp2p->irq);
+
 	return 0;
 
 unreg_ws:
