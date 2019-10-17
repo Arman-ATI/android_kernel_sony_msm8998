@@ -170,6 +170,11 @@ ifdef CONFIG_SND_SOC_SDM660
         MACHINE_OBJS += sdm660-common.o
 endif
 
+# for MSM8998 sound card driver
+ifdef CONFIG_SND_SOC_MSM8998
+	MACHINE_OBJS += msm8998.o
+endif
+
 # for SDM6xx sound card driver
 ifdef CONFIG_SND_SOC_INT_CODEC
         MACHINE_OBJS += sdm660-internal.o
