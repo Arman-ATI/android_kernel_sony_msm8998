@@ -361,6 +361,11 @@ int ipa3_odl_pipe_open(void)
 	int ret = 0;
 	struct ipa_ep_cfg_holb holb_cfg;
 
+	if (ipa3_ctx->ipa_hw_type < IPA_HW_v4_1) {
+		IPADBG("ADPL/ODL not supported on this HW\n");
+		return -ENODEV;
+	}
+
 	if (!ipa3_odl_ctx->odl_state.adpl_open) {
 		IPAERR("adpl pipe not configured\n");
 		return 0;
@@ -418,8 +423,14 @@ static int ipa_adpl_open(struct inode *inode, struct file *filp)
 {
 	int ret = 0;
 
+	if (ipa3_ctx->ipa_hw_type < IPA_HW_v4_1) {
+		IPADBG("ADPL/ODL not supported on this HW\n");
+		return -ENODEV;
+	}
+
 	IPADBG("Called the function :\n");
 	mutex_lock(&ipa3_odl_ctx->pipe_lock);
+
 	if (ipa3_odl_ctx->odl_state.odl_init &&
 				!ipa3_odl_ctx->odl_state.adpl_open) {
 		/* Activate ipa_pm*/
@@ -464,6 +475,11 @@ void ipa3_odl_pipe_cleanup(bool is_ssr)
 {
 	bool ipa_odl_opened = false;
 	struct ipa_ep_cfg_holb holb_cfg;
+
+	if (ipa3_ctx->ipa_hw_type < IPA_HW_v4_1) {
+		IPADBG("ADPL/ODL not supported on this HW\n");
+		return;
+	}
 
 	if (!ipa3_odl_ctx->odl_state.adpl_open) {
 		IPAERR("adpl pipe not configured\n");
