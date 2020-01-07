@@ -5289,7 +5289,7 @@ static int q6afe_send_enc_config(u16 port_id,
 		if (ret) {
 			pr_err("%s: AFE_ENCODER_PARAM_ID_ENABLE_SCRAMBLING for port 0x%x failed %d\n",
 				__func__, port_id, ret);
-#ifndef CONFIG_ARCH_SDM660
+#if !defined(CONFIG_ARCH_SDM660) && !defined(CONFIG_ARCH_MSM8998)
 			goto exit;
 #endif
 		}
