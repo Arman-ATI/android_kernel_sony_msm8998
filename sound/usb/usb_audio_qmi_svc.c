@@ -285,6 +285,7 @@ static unsigned long uaudio_iommu_map(enum mem_type mtype, phys_addr_t pa,
 	size_t sg_len, total_len = 0;
 	struct scatterlist *sg;
 	phys_addr_t pa_sg;
+	int prot = IOMMU_READ | IOMMU_WRITE;
 
 	switch (mtype) {
 	case MEM_EVENT_RING:
@@ -323,7 +324,7 @@ static unsigned long uaudio_iommu_map(enum mem_type mtype, phys_addr_t pa,
 		sg_len = PAGE_ALIGN(sg->offset + sg->length);
 		pa_sg = page_to_phys(sg_page(sg));
 		ret = iommu_map(uaudio_qdev->domain, va_sg, pa_sg, sg_len,
-			IOMMU_READ | IOMMU_WRITE | IOMMU_MMIO);
+												prot);
 		if (ret) {
 			uaudio_err("mapping failed ret%d\n", ret);
 			uaudio_err("memtype:%d, pa:%pa iova:%lu sg_len:%zu\n",
@@ -334,6 +335,9 @@ static unsigned long uaudio_iommu_map(enum mem_type mtype, phys_addr_t pa,
 		}
 		uaudio_dbg("memtype %d:map pa:%pa to iova:%lu len:%zu\n", mtype,
 				&pa_sg, va_sg, sg_len);
+		/* Invalidate cpu cache for device to access shared memory */
+		dma_sync_single_for_device(uaudio_qdev->dev, va_sg, sg_len,
+												DMA_TO_DEVICE);
 		va_sg += sg_len;
 		total_len += sg_len;
 	}
@@ -350,11 +354,15 @@ skip_sgt_map:
 	uaudio_dbg("memtype:%d map pa:%pa to iova %lu size:%zu\n", mtype, &pa,
 			va, size);
 
-	ret = iommu_map(uaudio_qdev->domain, va, pa, size,
-		IOMMU_READ | IOMMU_WRITE | IOMMU_MMIO);
-	if (ret)
+	ret = iommu_map(uaudio_qdev->domain, va, pa, size, prot);
+	if (ret) {
 		uaudio_err("failed to map pa:%pa iova:%lu memtype:%d ret:%d\n",
 				&pa, va, mtype, ret);
+		goto done;
+	}
+
+	/* Invalidate cpu cache for device to access shared memory */
+	dma_sync_single_for_device(uaudio_qdev->dev, va, size, DMA_TO_DEVICE);
 done:
 	return va;
 }
