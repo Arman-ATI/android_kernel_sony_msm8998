@@ -124,6 +124,9 @@
  */
 #define ADRENO_PROCESS_RECLAIM BIT(23)
 
+/* Adreno 5XX "simple" GPMU */
+#define ADRENO_A5XX_GPMU BIT(29)
+
 /*
  * Adreno GPU quirks - control bits for various workarounds
  */
