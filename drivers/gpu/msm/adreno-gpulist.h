@@ -185,7 +185,7 @@ static const struct adreno_reglist a530_vbif_regs[] = {
 static const struct adreno_a5xx_core adreno_gpu_core_a530v2 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_A530, 5, 3, 0, 1),
-		.features = ADRENO_GPMU | ADRENO_SPTP_PC | ADRENO_LM |
+		.features = ADRENO_A5XX_GPMU | ADRENO_SPTP_PC | ADRENO_LM |
 			ADRENO_PREEMPTION | ADRENO_64BIT |
 			ADRENO_CONTENT_PROTECTION,
 		.gpudev = &adreno_a5xx_gpudev,
@@ -209,7 +209,7 @@ static const struct adreno_a5xx_core adreno_gpu_core_a530v2 = {
 static const struct adreno_a5xx_core adreno_gpu_core_a530v3 = {
 	.base = {
 		DEFINE_ADRENO_REV(ADRENO_REV_A530, 5, 3, 0, ANY_ID),
-		.features = ADRENO_GPMU | ADRENO_SPTP_PC | ADRENO_LM |
+		.features = ADRENO_A5XX_GPMU | ADRENO_SPTP_PC | ADRENO_LM |
 			ADRENO_PREEMPTION | ADRENO_64BIT |
 			ADRENO_CONTENT_PROTECTION,
 		.gpudev = &adreno_a5xx_gpudev,
@@ -512,7 +512,7 @@ static const struct adreno_a5xx_core adreno_gpu_core_a540v2 = {
 		DEFINE_ADRENO_REV(ADRENO_REV_A540, 5, 4, 0, ANY_ID),
 		.features = ADRENO_PREEMPTION | ADRENO_64BIT |
 			ADRENO_CONTENT_PROTECTION |
-			ADRENO_GPMU | ADRENO_SPTP_PC,
+			ADRENO_A5XX_GPMU | ADRENO_SPTP_PC,
 		.gpudev = &adreno_a5xx_gpudev,
 		.gmem_size = SZ_1M,
 		.busy_mask = 0xfffffffe,
