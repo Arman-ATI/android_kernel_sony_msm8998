@@ -8,3 +8,6 @@ obj-$(CONFIG_MDSS_PLL) += mdss-dsi-pll-28lpm.o
 obj-$(CONFIG_MDSS_PLL) += mdss-dsi-pll-28nm-util.o
 obj-$(CONFIG_MDSS_PLL) += mdss-dsi-pll-12nm.o
 obj-$(CONFIG_MDSS_PLL) += mdss-dsi-pll-12nm-util.o
+obj-$(CONFIG_MDSS_PLL) += mdss-dsi-pll-10nm.o
+obj-$(CONFIG_MDSS_PLL) += mdss-dp-pll-10nm.o
+obj-$(CONFIG_MDSS_PLL) += mdss-dp-pll-10nm-util.o
