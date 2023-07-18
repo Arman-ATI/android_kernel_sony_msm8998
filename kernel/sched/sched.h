@@ -2710,6 +2710,8 @@ enum schedutil_type {
 	ENERGY_UTIL,
 };
 
+unsigned long approximate_util_avg(unsigned long util, u64 delta);
+
 #ifdef CONFIG_SMP
 static inline unsigned long cpu_util_cfs(struct rq *rq)
 {
