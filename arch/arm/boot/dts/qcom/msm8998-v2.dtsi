@@ -321,7 +321,8 @@
 		< 1344000  5859 >,
 		< 1728000  7759 >,
 		< 1958400 11863 >,
-		< 2208000 13763 >;
+		< 2208000 13763 >,
+		< 2419200 15960 >;
 };
 &clock_gcc {
 	compatible = "qcom,gcc-8998-v2";
@@ -1216,17 +1217,17 @@
 		qcom,gpu-pwrlevel@0 {
 			reg = <0>;
 			qcom,gpu-freq = <800000000>;
-			qcom,bus-freq = <12>;
+			qcom,bus-freq = <13>;
 			qcom,bus-min = <12>;
-			qcom,bus-max = <12>;
+			qcom,bus-max = <13>;
 		};
 
 		qcom,gpu-pwrlevel@1 {
 			reg = <1>;
 			qcom,gpu-freq = <670000000>;
-			qcom,bus-freq = <12>;
+			qcom,bus-freq = <13>;
 			qcom,bus-min = <11>;
-			qcom,bus-max = <12>;
+			qcom,bus-max = <13>;
 		};
 
 		qcom,gpu-pwrlevel@2 {
@@ -1234,7 +1235,7 @@
 			qcom,gpu-freq = <596000000>;
 			qcom,bus-freq = <11>;
 			qcom,bus-min = <9>;
-			qcom,bus-max = <12>;
+			qcom,bus-max = <13>;
 		};
 
 		qcom,gpu-pwrlevel@3 {
