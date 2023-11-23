@@ -556,7 +556,7 @@
 			compatible = "qcom,qpnp-regulator";
 			reg = <0x2f00 0x100>;
 			regulator-name = "pm8998_s10";
-			regulator-min-microvolt = <572000>;
+			regulator-min-microvolt = <468000>;
 			regulator-max-microvolt = <1112000>;
 			qcom,enable-time = <500>;
 			regulator-always-on;
@@ -566,7 +566,7 @@
 			compatible = "qcom,qpnp-regulator";
 			reg = <0x3800 0x100>;
 			regulator-name = "pm8998_s13";
-			regulator-min-microvolt = <572000>;
+			regulator-min-microvolt = <468000>;
 			regulator-max-microvolt = <1112000>;
 			qcom,enable-time = <500>;
 			regulator-always-on;
