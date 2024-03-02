@@ -141,6 +141,15 @@ config MACH_SONY_LILAC
 	If you enable this config,
 	please use SONY Mobile device tree.
 
+config MACH_SONY_LILAC_DCM
+	bool "Sony Mobile Lilac Docomo"
+	depends on ARCH_SONY_YOSHINO
+	help
+	Support for the SONY Mobile Lilac Docomo device
+	which is based on SONY Yoshino platform.
+	If you enable this config,
+	please use SONY Mobile device tree.
+
 config ARCH_MSMHAMSTER
 	bool "Enable Support for Qualcomm Technologies Inc MSMHAMSTER"
 	depends on ARCH_QCOM
