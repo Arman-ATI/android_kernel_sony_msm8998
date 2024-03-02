@@ -227,6 +227,7 @@ dtb-$(CONFIG_MACH_SONY_POPLAR_KDDI) += msm8998-v2.1-yoshino-poplar_kddi.dtb
 dtb-$(CONFIG_MACH_SONY_LILAC) += msm8998-yoshino-lilac_generic.dtb \
 	msm8998-v2-yoshino-lilac_generic.dtb \
 	msm8998-v2.1-yoshino-lilac_generic.dtb
+dtb-$(CONFIG_MACH_SONY_LILAC_DCM) += msm8998-v2.1-yoshino-lilac_dcm.dtb
 endif
 
 dtb-$(CONFIG_ARCH_MSMHAMSTER) += msmhamster-rumi.dtb
