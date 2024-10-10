@@ -82,6 +82,7 @@
 #include <linux/kcov.h>
 #include <linux/cpufreq_times.h>
 #include <linux/devfreq_boost.h>
+#include <linux/moduleparam.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -94,6 +95,10 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/task.h>
+
+static unsigned short devfreq_boost_fork_ms __read_mostly = 50;
+module_param(devfreq_boost_fork_ms, ushort, 0644);
+MODULE_PARM_DESC(devfreq_boost_fork_ms, "The duration in ms of devfreq_boost upon a zygote fork");
 
 /*
  * Minimum number of threads to boot the kernel
@@ -1909,9 +1914,9 @@ long _do_fork(unsigned long clone_flags,
 	int trace = 0;
 	long nr;
 
-	/* Boost GPU to the max for 50 ms when userspace launches an app */
+	/* Boost DDR bus to the max for "devfreq_boost_fork_ms" ms when userspace launches an app */
 	if (task_is_zygote(current)) {
-		devfreq_boost_kick_max(DEVFREQ_MSM_CPUBW, 50);
+		devfreq_boost_kick_max(DEVFREQ_MSM_CPUBW, devfreq_boost_fork_ms);
 	}
 
 	/*
