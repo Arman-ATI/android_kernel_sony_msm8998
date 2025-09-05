@@ -1483,6 +1483,8 @@ static inline struct timespec current_fs_time(struct super_block *sb)
 	return timespec_trunc(now, sb->s_time_gran);
 }
 
+extern struct timespec current_time(struct inode *inode);
+
 /*
  * Snapshotting support.
  */

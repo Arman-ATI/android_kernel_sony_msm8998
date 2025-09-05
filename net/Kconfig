@@ -305,7 +305,8 @@ config BPF_JIT
 
 	  Note, admin should enable this feature changing:
 	  /proc/sys/net/core/bpf_jit_enable
-	  /proc/sys/net/core/bpf_jit_harden (optional)
+	  /proc/sys/net/core/bpf_jit_harden   (optional)
+	  /proc/sys/net/core/bpf_jit_kallsyms (optional)
 
 config NET_FLOW_LIMIT
 	bool
@@ -382,6 +383,7 @@ source "net/can/Kconfig"
 source "net/irda/Kconfig"
 source "net/bluetooth/Kconfig"
 source "net/rxrpc/Kconfig"
+source "net/strparser/Kconfig"
 
 config FIB_RULES
 	bool
@@ -413,6 +415,14 @@ config LWTUNNEL
 	  tunnels like mpls. There is no netdevice associated with a light
 	  weight tunnel endpoint. Tunnel encapsulation parameters are stored
 	  with light weight tunnel state associated with fib routes.
+
+config LWTUNNEL_BPF
+	bool "Execute BPF program as route nexthop action"
+	depends on LWTUNNEL
+	default y if LWTUNNEL=y
+	---help---
+	  Allows to run BPF programs as a nexthop action following a route
+	  lookup for incoming and outgoing packets.
 
 source "net/ipc_router/Kconfig"
 
