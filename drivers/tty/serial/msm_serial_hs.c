@@ -243,6 +243,7 @@ struct msm_hs_port {
 	void *ipc_msm_hs_log_ctxt;
 	void *ipc_msm_hs_pwr_ctxt;
 	int ipc_debug_mask;
+	struct delayed_work autosuspend_restore_work;
 };
 
 static const struct of_device_id msm_hs_match_table[] = {
@@ -262,6 +263,9 @@ static const struct of_device_id msm_hs_match_table[] = {
 #define BUS_RESET 0
 #define RX_FLUSH_COMPLETE_TIMEOUT 300 /* In jiffies */
 #define BLSP_UART_CLK_FMAX 63160000
+#define MSM_HS_AUTOSUSPEND_DELAY_MS 100
+#define MSM_HS_HIGH_SPEED_AUTOSUSPEND_DELAY_MS 5000
+#define MSM_HS_HIGH_SPEED_BAUD 460800
 
 static struct dentry *debug_base;
 static struct platform_driver msm_serial_hs_platform_driver;
@@ -275,6 +279,15 @@ static struct msm_hs_port *msm_hs_get_hs_port(int port_index);
 static void msm_hs_queue_rx_desc(struct msm_hs_port *msm_uport);
 static int disconnect_rx_endpoint(struct msm_hs_port *msm_uport);
 static int msm_hs_pm_resume(struct device *dev);
+
+static void msm_hs_restore_autosuspend(struct work_struct *work)
+{
+	struct msm_hs_port *msm_uport = container_of(to_delayed_work(work),
+		struct msm_hs_port, autosuspend_restore_work);
+
+	pm_runtime_set_autosuspend_delay(msm_uport->uport.dev,
+		MSM_HS_AUTOSUSPEND_DELAY_MS);
+}
 
 #define UARTDM_TO_MSM(uart_port) \
 	container_of((uart_port), struct msm_hs_port, uport)
@@ -703,6 +716,7 @@ static int msm_hs_remove(struct platform_device *pdev)
 	msm_uport = get_matching_hs_port(pdev);
 	if (!msm_uport)
 		return -EINVAL;
+	cancel_delayed_work_sync(&msm_uport->autosuspend_restore_work);
 
 	dev = msm_uport->uport.dev;
 	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_clock.attr);
@@ -1088,6 +1102,9 @@ static void msm_hs_set_termios(struct uart_port *uport,
 	unsigned long data;
 	unsigned int c_cflag = termios->c_cflag;
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
+	bool high_speed;
+
+	cancel_delayed_work_sync(&msm_uport->autosuspend_restore_work);
 
 	/**
 	 * set_termios can be invoked from the framework when
@@ -1128,6 +1145,11 @@ static void msm_hs_set_termios(struct uart_port *uport,
 	/* Temporary remapping  200 BAUD to 3.2 mbps */
 	if (bps == 200)
 		bps = 3200000;
+
+	high_speed = bps > MSM_HS_HIGH_SPEED_BAUD;
+	pm_runtime_set_autosuspend_delay(uport->dev, high_speed ?
+		MSM_HS_HIGH_SPEED_AUTOSUSPEND_DELAY_MS :
+		MSM_HS_AUTOSUSPEND_DELAY_MS);
 
 	uport->uartclk = clk_get_rate(msm_uport->clk);
 	if (!uport->uartclk)
@@ -1212,6 +1234,11 @@ static void msm_hs_set_termios(struct uart_port *uport,
 	}
 	msm_hs_write(uport, UART_DM_MR1, data);
 	MSM_HS_INFO("%s(): Cflags 0x%x Baud %u\n", __func__, c_cflag, bps);
+	if (high_speed)
+		mod_delayed_work(system_wq,
+			&msm_uport->autosuspend_restore_work,
+			msecs_to_jiffies(
+				MSM_HS_HIGH_SPEED_AUTOSUSPEND_DELAY_MS));
 
 	mutex_unlock(&msm_uport->mtx);
 
@@ -3278,7 +3305,8 @@ static void  msm_serial_hs_rt_init(struct uart_port *uport)
 
 	MSM_HS_DBG("%s(): Enabling runtime pm\n", __func__);
 	pm_runtime_set_suspended(uport->dev);
-	pm_runtime_set_autosuspend_delay(uport->dev, 100);
+	pm_runtime_set_autosuspend_delay(uport->dev,
+		MSM_HS_AUTOSUSPEND_DELAY_MS);
 	pm_runtime_use_autosuspend(uport->dev);
 	mutex_lock(&msm_uport->mtx);
 	msm_uport->pm_state = MSM_HS_PM_SUSPENDED;
@@ -3492,6 +3520,8 @@ static int msm_hs_probe(struct platform_device *pdev)
 	}
 
 	mutex_init(&msm_uport->mtx);
+	INIT_DELAYED_WORK(&msm_uport->autosuspend_restore_work,
+		msm_hs_restore_autosuspend);
 
 	/* Initialize SPS HW connected with UART core */
 	ret = msm_hs_sps_init(msm_uport);
@@ -3640,6 +3670,10 @@ static void msm_hs_shutdown(struct uart_port *uport)
 	struct circ_buf *tx_buf = &uport->state->xmit;
 	int data;
 	unsigned long flags;
+
+	cancel_delayed_work_sync(&msm_uport->autosuspend_restore_work);
+	pm_runtime_set_autosuspend_delay(uport->dev,
+		MSM_HS_AUTOSUSPEND_DELAY_MS);
 
 	if (is_use_low_power_wakeup(msm_uport))
 		irq_set_irq_wake(msm_uport->wakeup.irq, 0);
