@@ -14584,8 +14584,10 @@ static int __tasha_enable_efuse_sensing(struct tasha_priv *tasha)
 
 	__tasha_cdc_mclk_enable(tasha, true);
 
-	regmap_update_bits(tasha->wcd9xxx->regmap,
-			   WCD9335_CHIP_TIER_CTRL_EFUSE_CTL, 0x1E, 0x20);
+	if (!TASHA_IS_2_0(tasha->wcd9xxx))
+		regmap_update_bits(tasha->wcd9xxx->regmap,
+				   WCD9335_CHIP_TIER_CTRL_EFUSE_CTL,
+				   0x1E, 0x02);
 	regmap_update_bits(tasha->wcd9xxx->regmap,
 			   WCD9335_CHIP_TIER_CTRL_EFUSE_CTL, 0x01, 0x01);
 
