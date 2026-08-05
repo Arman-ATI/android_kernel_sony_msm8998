@@ -69,6 +69,13 @@
 
 static struct v4l2_file_operations msm_csiphy_v4l2_subdev_fops;
 
+static bool msm_csiphy_has_clk_mux(uint32_t version)
+{
+	return version >= CSIPHY_VERSION_V30 &&
+		(version == CSIPHY_VERSION_V342_1 ||
+		 version < CSIPHY_VERSION_V50);
+}
+
 static void msm_csiphy_write_settings(
 	struct csiphy_device *csiphy_dev,
 	struct csiphy_settings_t csiphy_settings)
@@ -1401,10 +1408,8 @@ static int msm_csiphy_lane_config(struct csiphy_device *csiphy_dev,
 		return rc;
 	}
 
-	if (csiphy_dev->hw_version >= CSIPHY_VERSION_V30 &&
-		csiphy_dev->clk_mux_base != NULL &&
-		(csiphy_dev->hw_version == CSIPHY_VERSION_V342_1 ||
-		csiphy_dev->hw_version < CSIPHY_VERSION_V50)) {
+	if (msm_csiphy_has_clk_mux(csiphy_dev->hw_version) &&
+		csiphy_dev->clk_mux_base != NULL) {
 		val = msm_camera_io_r(csiphy_dev->clk_mux_base);
 		if (csiphy_params->combo_mode &&
 			(csiphy_params->lane_mask & 0x18) == 0x18) {
@@ -2534,7 +2539,7 @@ static int csiphy_probe(struct platform_device *pdev)
 		goto csiphy_no_resource;
 	}
 
-	if (new_csiphy_dev->hw_dts_version >= CSIPHY_VERSION_V30) {
+	if (msm_csiphy_has_clk_mux(new_csiphy_dev->hw_dts_version)) {
 		new_csiphy_dev->clk_mux_base = msm_camera_get_reg_base(pdev,
 					"csiphy_clk_mux", true);
 		if (!new_csiphy_dev->clk_mux_base)
@@ -2566,7 +2571,7 @@ static int csiphy_probe(struct platform_device *pdev)
 	return 0;
 
 csiphy_no_irq_resource:
-	if (new_csiphy_dev->hw_dts_version >= CSIPHY_VERSION_V30) {
+	if (msm_csiphy_has_clk_mux(new_csiphy_dev->hw_dts_version)) {
 		msm_camera_put_reg_base(pdev, new_csiphy_dev->clk_mux_base,
 			"csiphy_clk_mux", true);
 	}
@@ -2590,7 +2595,7 @@ static int msm_csiphy_exit(struct platform_device *pdev)
 		csiphy_dev->num_all_clk);
 
 	msm_camera_put_reg_base(pdev, csiphy_dev->base, "csiphy", true);
-	if (csiphy_dev->hw_dts_version >= CSIPHY_VERSION_V30) {
+	if (msm_csiphy_has_clk_mux(csiphy_dev->hw_dts_version)) {
 		msm_camera_put_reg_base(pdev, csiphy_dev->clk_mux_base,
 			"csiphy_clk_mux", true);
 	}
