@@ -1664,7 +1664,7 @@ static struct notifier_block pil_pm_notifier = {
 
 static int __init msm_pil_init(void)
 {
-	struct device_node *np;
+	struct device_node *np, *md_np;
 	struct resource res;
 	int i;
 	size_t size;
@@ -1690,13 +1690,25 @@ static int __init msm_pil_init(void)
 	for (i = 0; i < resource_size(&res)/sizeof(u32); i++)
 		writel_relaxed(0, pil_info_base + (i * sizeof(u32)));
 
-	/* Get Global minidump ToC*/
-	g_md_toc = qcom_smem_get(QCOM_SMEM_HOST_ANY, SBL_MINIDUMP_SMEM_ID,
-				 &size);
-	pr_debug("Minidump: g_md_toc is %pa\n", &g_md_toc);
-	if (PTR_ERR(g_md_toc) == -EPROBE_DEFER) {
-		pr_err("SMEM is not initialized.\n");
-		return -EPROBE_DEFER;
+	/* Get Global minidump ToC when supported by the bootloader. */
+	md_np = of_find_compatible_node(NULL, NULL,
+					"qcom,msm-imem-minidump");
+	if (md_np) {
+		of_node_put(md_np);
+		g_md_toc = qcom_smem_get(QCOM_SMEM_HOST_ANY,
+					 SBL_MINIDUMP_SMEM_ID, &size);
+		if (IS_ERR(g_md_toc)) {
+			if (PTR_ERR(g_md_toc) == -EPROBE_DEFER) {
+				pr_err("SMEM is not initialized.\n");
+				return -EPROBE_DEFER;
+			}
+
+			pr_debug("Minidump SMEM is unavailable: %ld\n",
+				 PTR_ERR(g_md_toc));
+			g_md_toc = NULL;
+		} else {
+			pr_debug("Minidump: g_md_toc is %pa\n", &g_md_toc);
+		}
 	}
 
 	pil_wq = alloc_workqueue("pil_workqueue", WQ_HIGHPRI | WQ_UNBOUND, 0);
