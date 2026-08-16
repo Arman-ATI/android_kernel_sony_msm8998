@@ -8004,6 +8004,39 @@ static int _ipa_suspend_resume_pipe(enum ipa_client_type client, bool suspend)
 	if (!ep->valid)
 		return 0;
 
+	/*
+	 * IPA 3.x suspends consumer endpoints through IPA_ENDP_INIT_CTRL.
+	 * Apps-pipe suspend uses GSI channel stop/start only on IPA 4.0+.
+	 */
+	if (ipa3_ctx->ipa_hw_type < IPA_HW_v4_0) {
+		struct ipa_ep_cfg_ctrl cfg = {
+			.ipa_ep_suspend = suspend,
+		};
+
+		if (!IPA_CLIENT_IS_CONS(client))
+			return 0;
+
+		if (!suspend && !atomic_read(&ep->sys->curr_polling_state)) {
+			IPADBG("switch ch %ld to callback\n", ep->gsi_chan_hdl);
+			gsi_config_channel_mode(ep->gsi_chan_hdl,
+				GSI_CHAN_MODE_CALLBACK);
+		}
+
+		res = ipa3_cfg_ep_ctrl(ipa_ep_idx, &cfg);
+		if (res)
+			return res;
+
+		if (suspend) {
+			IPADBG("switch ch %ld to poll\n", ep->gsi_chan_hdl);
+			gsi_config_channel_mode(ep->gsi_chan_hdl,
+				GSI_CHAN_MODE_POLL);
+			if (!ipa3_gsi_channel_is_quite(ep))
+				return -EAGAIN;
+		}
+
+		return 0;
+	}
+
 	coal_ep_idx = ipa3_get_ep_mapping(IPA_CLIENT_APPS_WAN_COAL_CONS);
 
 	IPADBG("%s pipe %d\n", suspend ? "suspend" : "unsuspend", ipa_ep_idx);
