@@ -23,6 +23,7 @@ enum vidc_bus_type {
 	PERF,
 	DDR,
 	LLCC,
+	VMEM_PLUS,
 };
 enum scenario {
 	SCENARIO_WORST,
@@ -161,12 +162,42 @@ static struct lut {
 		}
 	},
 };
-static u32 get_type_frm_name(char *name)
+static u32 get_type_from_bus(struct bus_info *bus)
 {
-	if (!strcmp(name, "venus-ddr"))
+	if (bus->mode && !strcmp(bus->mode, "msm-vidc-vmem+"))
+		return VMEM_PLUS;
+	if (!strcmp(bus->name, "venus-ddr"))
 		return DDR;
-	else
-		return PERF;
+
+	return PERF;
+}
+
+static unsigned long __calculate_vmem_plus_ab(
+		struct vidc_bus_vote_data *d)
+{
+	unsigned long i, vmem_plus = 0;
+
+	if (!d->imem_ab_tbl || !d->imem_ab_tbl_size) {
+		vmem_plus = 1;
+		goto exit;
+	}
+
+	for (i = 0; i < d->imem_ab_tbl_size; i++) {
+		if (d->imem_ab_tbl[i].core_freq == d->core_freq) {
+			vmem_plus = d->imem_ab_tbl[i].imem_ab;
+			break;
+		}
+	}
+
+	if (!vmem_plus) {
+		vmem_plus = 1;
+		dprintk(VIDC_WARN,
+			"could not calculate vmem ab value due to core freq mismatch\n");
+		WARN_ON(VIDC_DBG_WARN_ENABLE);
+	}
+
+exit:
+	return vmem_plus;
 }
 
 static struct lut const *__lut(int width, int height)
@@ -580,6 +611,9 @@ static unsigned long __calculate_decoder(struct vidc_bus_vote_data *d,
 	case DDR:
 		ret = kbps(fp_round(ddr.total));
 		break;
+	case VMEM_PLUS:
+		ret = __calculate_vmem_plus_ab(d);
+		break;
 	default:
 		dprintk(VIDC_ERR, "%s - Unknown governor\n", __func__);
 	}
@@ -980,6 +1014,9 @@ static unsigned long __calculate_encoder(struct vidc_bus_vote_data *d,
 	case DDR:
 		ret = kbps(fp_round(ddr.total));
 		break;
+	case VMEM_PLUS:
+		ret = __calculate_vmem_plus_ab(d);
+		break;
 	default:
 		dprintk(VIDC_ERR, "%s - Unknown governor\n", __func__);
 	}
@@ -1025,7 +1062,7 @@ unsigned long __calc_bw(struct bus_info *bus,
 		}
 	}
 
-	type = get_type_frm_name(bus->name);
+	type = get_type_from_bus(bus);
 
 	for (c = 0; c < vidc_data->data_count; ++c)
 		ab_kbps += __calculate(&vidc_data->data[c], type);

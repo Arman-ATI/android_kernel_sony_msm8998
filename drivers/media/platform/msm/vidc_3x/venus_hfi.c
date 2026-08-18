@@ -814,7 +814,12 @@ no_data_count:
 	device->bus_vote.imem_size = device->res->imem_size;
 
 	venus_hfi_for_each_bus(device, bus) {
-		if (!bus->is_prfm_gov_used) {
+		if (bus->is_prfm_gov_used) {
+			freq = bus->range[1];
+		} else if (bus->mode &&
+				!strcmp(bus->mode, "msm-vidc-vmem+")) {
+			freq = __calc_bw(bus, &device->bus_vote);
+		} else {
 			rc = msm_vidc_table_get_target_freq(
 					device->res->gov_data,
 					&device->bus_vote, &freq);
@@ -823,8 +828,7 @@ no_data_count:
 				return rc;
 			}
 			device->bus_vote.total_bw_ddr = freq;
-		} else
-			freq = bus->range[1];
+		}
 
 		rc = __vote_bandwidth(bus, &freq);
 		if (rc)
