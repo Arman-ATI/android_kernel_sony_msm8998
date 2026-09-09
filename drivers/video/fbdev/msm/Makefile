@@ -53,8 +53,6 @@ obj-$(CONFIG_FB_MSM_MDSS) += mdss_dba_utils.o
 
 obj-$(CONFIG_FB_MSM_MDSS_HDMI_PANEL) += mdss_hdmi_tx.o
 obj-$(CONFIG_FB_MSM_MDSS_HDMI_PANEL) += mdss_hdmi_panel.o
-obj-$(CONFIG_FB_MSM_MDSS_HDMI_PANEL) += mdss_hdcp_1x.o
-obj-$(CONFIG_FB_MSM_MDSS_HDMI_PANEL) += mdss_hdcp_2x.o
 obj-$(CONFIG_FB_MSM_MDSS_HDMI_PANEL) += mdss_hdmi_hdcp2p2.o
 obj-$(CONFIG_FB_MSM_MDSS_HDMI_PANEL) += mdss_hdmi_cec.o
 obj-$(CONFIG_FB_MSM_MDSS_HDMI_PANEL) += mdss_hdmi_audio.o
@@ -65,6 +63,10 @@ endif
 obj-$(CONFIG_FB_MSM_MDSS_DP_PANEL) += mdss_dp.o mdss_dp_util.o
 obj-$(CONFIG_FB_MSM_MDSS_DP_PANEL) += mdss_dp_aux.o
 obj-$(CONFIG_FB_MSM_MDSS_DP_PANEL) += mdss_dp_hdcp2p2.o
+
+ifneq ($(filter y,$(CONFIG_FB_MSM_MDSS_HDMI_PANEL) $(CONFIG_FB_MSM_MDSS_DP_PANEL)),)
+obj-y += mdss_hdcp_1x.o mdss_hdcp_2x.o
+endif
 
 obj-$(CONFIG_FB_MSM_MDSS_WRITEBACK) += mdss_wb.o
 
