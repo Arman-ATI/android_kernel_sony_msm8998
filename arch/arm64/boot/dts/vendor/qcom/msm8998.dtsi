@@ -1494,8 +1494,8 @@
 			<0x01e04000 0x2c000>;
 		reg-names = "ipa-base", "gsi-base";
 		interrupts =
-			<0 333 0>,
-			<0 432 0>;
+			<0 333 IRQ_TYPE_EDGE_RISING>,
+			<0 432 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "ipa-irq", "gsi-irq";
 		status = "ok";
 		qcom,ipa-hw-ver = <11>; /* IPA core version = IPAv3.1 */
