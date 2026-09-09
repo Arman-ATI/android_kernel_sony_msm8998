@@ -707,13 +707,6 @@
 		};
 
 		cooling-maps {
-			ibat_freq {
-				trip = <&ibat_high>;
-				cooling-device =
-					<&CPU4 THERMAL_MAX_LIMIT
-						THERMAL_MAX_LIMIT>;
-			};
-
 			ibat_map4 {
 				trip = <&ibat_high>;
 				cooling-device =
@@ -777,13 +770,6 @@
 		};
 
 		cooling-maps {
-			vbat_freq {
-				trip = <&low_vbat>;
-				cooling-device =
-					<&CPU4 THERMAL_MAX_LIMIT
-						THERMAL_MAX_LIMIT>;
-			};
-
 			vbat_map4 {
 				trip = <&low_vbat>;
 				cooling-device =
@@ -865,13 +851,6 @@
 		};
 
 		cooling-maps {
-			soc_freq {
-				trip = <&low_soc>;
-				cooling-device =
-					<&CPU4 THERMAL_MAX_LIMIT
-						THERMAL_MAX_LIMIT>;
-			};
-
 			soc_map4 {
 				trip = <&low_soc>;
 				cooling-device =

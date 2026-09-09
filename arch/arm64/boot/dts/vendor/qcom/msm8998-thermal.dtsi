@@ -15,18 +15,52 @@
 #include <dt-bindings/thermal/thermal.h>
 
 &clock_cpu {
+	#address-cells = <1>;
+	#size-cells = <1>;
 	lmh_dcvs0: qcom,limits-dcvs@179ce800 {
+		compatible = "qcom,msm-hw-limits";
+		interrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>;
 		qcom,affinity = <0>;
+		reg = <0x179ce800 0x1000>,
+			<0x179c1400 0x1000>;
 		#thermal-sensor-cells = <0>;
+		qcom,legacy-lmh-enable;
+		qcom,no-cooling-device-register;
 	};
 
 	lmh_dcvs1: qcom,limits-dcvs@179cc800 {
+		compatible = "qcom,msm-hw-limits";
+		interrupts = <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>;
 		qcom,affinity = <1>;
+		reg = <0x179cc800 0x1000>,
+			<0x179c3400 0x1000>;
 		#thermal-sensor-cells = <0>;
+		qcom,legacy-lmh-enable;
+		qcom,no-cooling-device-register;
 	};
 
 	qcom,cpu-isolation {
 		compatible = "qcom,cpu-isolate";
+		cpu0_isolate: cpu0-isolate {
+			qcom,cpu = <&CPU0>;
+			#cooling-cells = <2>;
+		};
+
+		cpu1_isolate: cpu1-isolate {
+			qcom,cpu = <&CPU1>;
+			#cooling-cells = <2>;
+		};
+
+		cpu2_isolate: cpu2-isolate {
+			qcom,cpu = <&CPU2>;
+			#cooling-cells = <2>;
+		};
+
+		cpu3_isolate: cpu3-isolate {
+			qcom,cpu = <&CPU3>;
+			#cooling-cells = <2>;
+		};
+
 		cpu4_isolate: cpu4-isolate {
 			qcom,cpu = <&CPU4>;
 			#cooling-cells = <2>;
@@ -471,24 +505,6 @@
 						<&CPU4 THERMAL_NO_LIMIT
 							(THERMAL_MAX_LIMIT-1)>;
 				};
-				pop_cdev5 {
-					trip = <&pop_trip>;
-					cooling-device =
-						<&CPU5 THERMAL_NO_LIMIT
-							(THERMAL_MAX_LIMIT-1)>;
-				};
-				pop_cdev6 {
-					trip = <&pop_trip>;
-					cooling-device =
-						<&CPU6 THERMAL_NO_LIMIT
-							(THERMAL_MAX_LIMIT-1)>;
-				};
-				pop_cdev7 {
-					trip = <&pop_trip>;
-					cooling-device =
-						<&CPU7 THERMAL_NO_LIMIT
-							(THERMAL_MAX_LIMIT-1)>;
-				};
 			};
 		};
 
@@ -509,8 +525,7 @@
 				emerg_cdev0 {
 					trip = <&emerg_config0>;
 					cooling-device =
-						<&CPU0 THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
+						<&cpu0_isolate 1 1>;
 				};
 			};
 		};
@@ -532,8 +547,7 @@
 				emerg_cdev1 {
 					trip = <&emerg_config1>;
 					cooling-device =
-						<&CPU1 THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
+						<&cpu1_isolate 1 1>;
 				};
 			};
 		};
@@ -555,8 +569,7 @@
 				emerg_cdev2 {
 					trip = <&emerg_config2>;
 					cooling-device =
-						<&CPU2 THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
+						<&cpu2_isolate 1 1>;
 				};
 			};
 		};
@@ -578,8 +591,7 @@
 				emerg_cdev3 {
 					trip = <&emerg_config3>;
 					cooling-device =
-						<&CPU3 THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
+						<&cpu3_isolate 1 1>;
 				};
 			};
 		};
@@ -601,8 +613,7 @@
 				emerg_cdev4 {
 					trip = <&emerg_config4>;
 					cooling-device =
-						<&CPU4 THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
+						<&cpu4_isolate 1 1>;
 				};
 			};
 		};
@@ -624,8 +635,7 @@
 				emerg_cdev5 {
 					trip = <&emerg_config5>;
 					cooling-device =
-						<&CPU5 THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
+						<&cpu5_isolate 1 1>;
 				};
 			};
 		};
@@ -647,8 +657,7 @@
 				emerg_cdev6 {
 					trip = <&emerg_config6>;
 					cooling-device =
-						<&CPU6 THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
+						<&cpu6_isolate 1 1>;
 				};
 			};
 		};
@@ -670,8 +679,7 @@
 				emerg_cdev7 {
 					trip = <&emerg_config7>;
 					cooling-device =
-						<&CPU7 THERMAL_MAX_LIMIT
-							THERMAL_MAX_LIMIT>;
+						<&cpu7_isolate 1 1>;
 				};
 			};
 		};
