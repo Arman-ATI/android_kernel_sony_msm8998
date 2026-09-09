@@ -1036,7 +1036,7 @@ static int adc_tm5_register_interrupts(struct adc_tm_chip *chip)
 
 static int adc_tm5_init(struct adc_tm_chip *chip, uint32_t dt_chans)
 {
-	u8 buf[4], channels_available, meas_int_timer_2_3 = 0;
+	u8 buf[4], channels_available = 0, meas_int_timer_2_3 = 0;
 	int ret;
 	int dig_param_len = 4;
 	bool pmic_subtype_660 = false;
@@ -1046,6 +1046,14 @@ static int adc_tm5_init(struct adc_tm_chip *chip, uint32_t dt_chans)
 		(chip->pmic_rev_id->pmic_subtype == PM660_SUBTYPE)) {
 		dig_param_len = 2;
 		pmic_subtype_660 = true;
+	} else if (chip->data == &data_adc_tm_rev2) {
+		/*
+		 * The PM8998 rev2 adc-tm block has no NUM_BTM channel-count
+		 * register; that is a PMIC5/SDM660 feature. Reg 0x0f reads 0
+		 * here, so enforcing it would spuriously reject every valid
+		 * rev2 DT. Channel validity is already enforced by the
+		 * io-channels/children count check in adc_tm_probe().
+		 */
 	} else {
 		ret = adc_tm5_read_reg(chip, ADC_TM_NUM_BTM,
 					&channels_available, 1);
