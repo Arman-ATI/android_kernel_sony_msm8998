@@ -1,5 +1,6 @@
 /* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
  * Copyright (C) 2018, AngeloGioacchino Del Regno <kholk11@gmail.com>
+ * Copyright (C) 2026, Edrick Sinsuan <evcsinsuan@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -22,6 +23,29 @@
 	lmh_dcvs1: qcom,limits-dcvs@179cc800 {
 		qcom,affinity = <1>;
 		#thermal-sensor-cells = <0>;
+	};
+
+	qcom,cpu-isolation {
+		compatible = "qcom,cpu-isolate";
+		cpu4_isolate: cpu4-isolate {
+			qcom,cpu = <&CPU4>;
+			#cooling-cells = <2>;
+		};
+
+		cpu5_isolate: cpu5-isolate {
+			qcom,cpu = <&CPU5>;
+			#cooling-cells = <2>;
+		};
+
+		cpu6_isolate: cpu6-isolate {
+			qcom,cpu = <&CPU6>;
+			#cooling-cells = <2>;
+		};
+
+		cpu7_isolate: cpu7-isolate {
+			qcom,cpu = <&CPU7>;
+			#cooling-cells = <2>;
+		};
 	};
 };
 

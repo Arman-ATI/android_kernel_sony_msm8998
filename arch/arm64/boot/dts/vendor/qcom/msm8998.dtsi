@@ -2781,23 +2781,6 @@
 				"pcie_0_phy_pipe_reset";
 	};
 
-	qcom,bcl {
-		compatible = "qcom,bcl";
-		qcom,bcl-enable;
-		qcom,bcl-framework-interface;
-		qcom,bcl-freq-control-list = <&CPU4 &CPU5 &CPU6 &CPU7>;
-		qcom,bcl-hotplug-list = <&CPU4 &CPU5 &CPU6 &CPU7>;
-		qcom,bcl-soc-hotplug-list = <&CPU4 &CPU5 &CPU6 &CPU7>;
-		qcom,ibat-monitor {
-			qcom,low-threshold-uamp = <3400000>;
-			qcom,high-threshold-uamp = <4200000>;
-			qcom,mitigation-freq-khz = <576000>;
-			qcom,vph-high-threshold-uv = <3500000>;
-			qcom,vph-low-threshold-uv = <3300000>;
-			qcom,soc-low-threshold = <10>;
-		};
-	};
-
 	qcom,ssc@5c00000 {
 		compatible = "qcom,pil-tz-generic";
 		reg = <0x5c00000 0x4000>;
@@ -3390,13 +3373,10 @@
 };
 
 &bcl_sensor {
-	status = "disabled";
 	interrupts = <0x2 0x42 0x0 IRQ_TYPE_NONE>,
 		     <0x2 0x42 0x2 IRQ_TYPE_NONE>;
 	interrupt-names = "bcl-high-ibat",
 			  "bcl-low-vbat";
-	qcom,vbat-polling-delay-ms = <100>;
-	qcom,ibat-polling-delay-ms = <100>;
 };
 /*
 &pm8998_vadc {

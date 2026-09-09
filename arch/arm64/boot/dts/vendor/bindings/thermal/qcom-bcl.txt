@@ -19,6 +19,9 @@ Required Parameters:
 	of PMIC, can send interrupt to LMH hardware driver directly. In that
 	case the shadow peripheral address space should be mentioned along
 	with the bcl peripherals address.
+- reg-names: user defined names for the register address spaces. The names
+		"fg_user_adc" and "fg_lmh" identify the BCL user ADC and LMH
+		shadow peripherals respectively.
 - interrupts: <a b c> Where 'a' is the SLAVE ID of the PMIC, 'b' is
 		the peripheral ID and 'c' is the interrupt number in PMIC.
 - interrupt-names: user defined names for the interrupts. These
@@ -30,15 +33,22 @@ Required Parameters:
 		"bcl-crit-low-vbat"
 		"bcl-high-ibat"
 		"bcl-very-high-ibat"
+- #thermal-sensor-cells: must be 1. The sensor index selects high battery
+		current, very high battery current, low battery voltage ADC,
+		very low battery voltage, critical low battery voltage, or
+		battery state of charge in indexes 0 through 5 respectively.
 
 
 Optional Parameters:
 
 		bcl@4200 {
-			compatible = "qcom,msm-bcl";
-			reg = <0x4200 0xFF 0x88e 0x2>;
+			compatible = "qcom,msm-bcl-lmh";
+			reg = <0x4200 0xFF>,
+				<0x4300 0xFF>;
+			reg-names = "fg_user_adc", "fg_lmh";
 			interrupts = <0x2 0x42 0x0>,
-					<0x2 0x42 0x1>;
-			interrupt-names = "bcl-high-ibat-int",
-						"bcl-low-vbat-int";
+					<0x2 0x42 0x2>;
+			interrupt-names = "bcl-high-ibat",
+					"bcl-low-vbat";
+			#thermal-sensor-cells = <1>;
 		};
