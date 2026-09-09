@@ -372,11 +372,24 @@ static int probe(struct platform_device *pdev)
 		intr_flags = IRQF_TRIGGER_HIGH | IRQF_ONESHOT;
 
 	*irq = platform_get_irq_byname(pdev, "spdm-irq");
-	ret = request_threaded_irq(*irq, isr, threaded_isr,
-				   IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
-				   spdm_hyp_gov.name, pdev);
-	if (ret)
+	if (*irq < 0) {
+		ret = *irq;
+		dev_err(&pdev->dev, "failed to resolve SPDM IRQ: %d\n", ret);
 		goto no_irq;
+	}
+
+	ret = request_threaded_irq(*irq, isr, threaded_isr,
+				   intr_flags,
+				   spdm_hyp_gov.name, pdev);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"failed to request SPDM IRQ %d with flags %#lx: %d\n",
+			*irq, intr_flags, ret);
+		goto no_irq;
+	}
+
+	dev_info(&pdev->dev, "registered SPDM IRQ %d with flags %#lx\n",
+		 *irq, intr_flags);
 
 	enable_clocks();
 	return 0;
