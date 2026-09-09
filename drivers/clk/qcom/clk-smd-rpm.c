@@ -1182,10 +1182,151 @@ static const struct rpm_smd_clk_desc rpm_clk_qm215 = {
 	.num_clks = ARRAY_SIZE(qm215_clks),
 };
 
+/* msm8998 */
+DEFINE_CLK_SMD_RPM_BRANCH(msm8998, bi_tcxo, bi_tcxo_ao, QCOM_SMD_RPM_MISC_CLK,
+			  0, 19200000);
+DEFINE_CLK_SMD_RPM(msm8998, bimc_clk, bimc_a_clk, QCOM_SMD_RPM_MEM_CLK, 0);
+DEFINE_CLK_SMD_RPM(msm8998, cnoc_periph_clk, cnoc_periph_a_clk,
+		   QCOM_SMD_RPM_BUS_CLK, 0);
+DEFINE_CLK_SMD_RPM(msm8998, snoc_clk, snoc_a_clk, QCOM_SMD_RPM_BUS_CLK, 1);
+DEFINE_CLK_SMD_RPM(msm8998, cnoc_clk, cnoc_a_clk, QCOM_SMD_RPM_BUS_CLK, 2);
+DEFINE_CLK_SMD_RPM(msm8998, ipa_clk, ipa_a_clk, QCOM_SMD_RPM_IPA_CLK, 0);
+DEFINE_CLK_SMD_RPM(msm8998, ce1_clk, ce1_a_clk, QCOM_SMD_RPM_CE_CLK, 0);
+DEFINE_CLK_SMD_RPM(msm8998, mmssnoc_axi_rpm_clk, mmssnoc_axi_rpm_a_clk,
+		   QCOM_SMD_RPM_MMAXI_CLK, 0);
+DEFINE_CLK_SMD_RPM(msm8998, aggre1_noc_clk, aggre1_noc_a_clk,
+			  QCOM_SMD_RPM_AGGR_CLK, 1);
+DEFINE_CLK_SMD_RPM(msm8998, aggre2_noc_clk, aggre2_noc_a_clk,
+			  QCOM_SMD_RPM_AGGR_CLK, 2);
+
+DEFINE_CLK_SMD_RPM_QDSS(msm8998, qdss_clk, qdss_a_clk,
+			QCOM_SMD_RPM_MISC_CLK, 1);
+
+DEFINE_CLK_SMD_RPM_XO_BUFFER(msm8998, ln_bb_clk1, ln_bb_clk1_a, 1);
+DEFINE_CLK_SMD_RPM_XO_BUFFER(msm8998, ln_bb_clk2, ln_bb_clk2_a, 2);
+DEFINE_CLK_SMD_RPM_XO_BUFFER(msm8998, ln_bb_clk3, ln_bb_clk3_a, 3);
+DEFINE_CLK_SMD_RPM_XO_BUFFER_PINCTRL(msm8998, ln_bb_clk1_pin, ln_bb_clk1_a_pin, 1);
+DEFINE_CLK_SMD_RPM_XO_BUFFER_PINCTRL(msm8998, ln_bb_clk2_pin, ln_bb_clk2_a_pin, 2);
+DEFINE_CLK_SMD_RPM_XO_BUFFER_PINCTRL(msm8998, ln_bb_clk3_pin, ln_bb_clk3_a_pin, 3);
+
+DEFINE_CLK_SMD_RPM_XO_BUFFER(msm8998, rf_clk1, rf_clk1_a, 4);
+DEFINE_CLK_SMD_RPM_XO_BUFFER(msm8998, rf_clk2, rf_clk2_a, 5);
+DEFINE_CLK_SMD_RPM_XO_BUFFER(msm8998, rf_clk3, rf_clk3_a, 6);
+DEFINE_CLK_SMD_RPM_XO_BUFFER_PINCTRL(msm8998, rf_clk1_pin, rf_clk1_a_pin, 4);
+DEFINE_CLK_SMD_RPM_XO_BUFFER_PINCTRL(msm8998, rf_clk2_pin, rf_clk2_a_pin, 5);
+DEFINE_CLK_SMD_RPM_XO_BUFFER_PINCTRL(msm8998, rf_clk3_pin, rf_clk3_a_pin, 6);
+
+DEFINE_CLK_SMD_RPM_XO_BUFFER(msm8998, div_clk1, div_clk1_a, 0xb);
+DEFINE_CLK_SMD_RPM_XO_BUFFER(msm8998, div_clk2, div_clk2_a, 0xc);
+DEFINE_CLK_SMD_RPM_XO_BUFFER(msm8998, div_clk3, div_clk3_a, 0xd);
+
+/* Voter clocks */
+static DEFINE_CLK_VOTER(mmssnoc_axi_clk, mmssnoc_axi_rpm_clk, 0);
+static DEFINE_CLK_VOTER(mmssnoc_axi_a_clk, mmssnoc_axi_rpm_a_clk, 0);
+static DEFINE_CLK_VOTER(aggre1_noc_msmbus_clk, aggre1_noc_clk, LONG_MAX);
+static DEFINE_CLK_VOTER(aggre1_noc_msmbus_a_clk, aggre1_noc_a_clk, LONG_MAX);
+static DEFINE_CLK_VOTER(aggre1_noc_smmu_clk, aggre1_noc_clk, 1000);
+static DEFINE_CLK_VOTER(aggre1_noc_usb_clk, aggre1_noc_clk, 19200000);
+
+/* Voter Branch clocks */
+static DEFINE_CLK_BRANCH_VOTER(bi_tcxo_dwc3_clk, bi_tcxo);
+static DEFINE_CLK_BRANCH_VOTER(bi_tcxo_pil_ssc_clk, bi_tcxo);
+static DEFINE_CLK_BRANCH_VOTER(bi_tcxo_pil_spss_clk, bi_tcxo);
+
+static struct clk_hw *msm8998_clks[] = {
+	[RPM_SMD_XO_CLK_SRC]	= &msm8998_bi_tcxo.hw,
+	[RPM_SMD_XO_A_CLK_SRC]	= &msm8998_bi_tcxo_ao.hw,
+	[RPM_SMD_SNOC_CLK]	= &msm8998_snoc_clk.hw,
+	[RPM_SMD_SNOC_A_CLK]	= &msm8998_snoc_a_clk.hw,
+	[RPM_SMD_BIMC_CLK]	= &msm8998_bimc_clk.hw,
+	[RPM_SMD_BIMC_A_CLK]	= &msm8998_bimc_a_clk.hw,
+	[RPM_SMD_QDSS_CLK]	= &msm8998_qdss_clk.hw,
+	[RPM_SMD_QDSS_A_CLK]	= &msm8998_qdss_a_clk.hw,
+	[RPM_SMD_LN_BB_CLK1]	= &msm8998_ln_bb_clk1.hw,
+	[RPM_SMD_LN_BB_CLK1_A]	= &msm8998_ln_bb_clk1_a.hw,
+	[RPM_SMD_LN_BB_CLK1_PIN] = &msm8998_ln_bb_clk1_pin.hw,
+	[RPM_SMD_LN_BB_CLK1_A_PIN] = &msm8998_ln_bb_clk1_a_pin.hw,
+	[RPM_SMD_LN_BB_CLK2]	= &msm8998_ln_bb_clk2.hw,
+	[RPM_SMD_LN_BB_CLK2_A]	= &msm8998_ln_bb_clk2_a.hw,
+	[RPM_SMD_LN_BB_CLK2_PIN] = &msm8998_ln_bb_clk2_pin.hw,
+	[RPM_SMD_LN_BB_CLK2_A_PIN] = &msm8998_ln_bb_clk2_a_pin.hw,
+	[RPM_SMD_LN_BB_CLK3]	= &msm8998_ln_bb_clk3.hw,
+	[RPM_SMD_LN_BB_CLK3_A]	= &msm8998_ln_bb_clk3_a.hw,
+	[RPM_SMD_LN_BB_CLK3_PIN] = &msm8998_ln_bb_clk3_pin.hw,
+	[RPM_SMD_LN_BB_CLK3_A_PIN] = &msm8998_ln_bb_clk3_a_pin.hw,
+	[RPM_SMD_RF_CLK1]	= &msm8998_rf_clk1.hw,
+	[RPM_SMD_RF_CLK1_A]	= &msm8998_rf_clk1_a.hw,
+	[RPM_SMD_RF_CLK1_PIN]	= &msm8998_rf_clk1_pin.hw,
+	[RPM_SMD_RF_CLK1_A_PIN]	= &msm8998_rf_clk1_a_pin.hw,
+	[RPM_SMD_RF_CLK2]	= &msm8998_rf_clk2.hw,
+	[RPM_SMD_RF_CLK2_A]	= &msm8998_rf_clk2_a.hw,
+	[RPM_SMD_RF_CLK2_PIN]	= &msm8998_rf_clk2_pin.hw,
+	[RPM_SMD_RF_CLK2_A_PIN]	= &msm8998_rf_clk2_a_pin.hw,
+	[RPM_SMD_RF_CLK3]	= &msm8998_rf_clk3.hw,
+	[RPM_SMD_RF_CLK3_A]	= &msm8998_rf_clk3_a.hw,
+	[RPM_SMD_RF_CLK3_PIN]	= &msm8998_rf_clk3_pin.hw,
+	[RPM_SMD_RF_CLK3_A_PIN]	= &msm8998_rf_clk3_a_pin.hw,
+	[RPM_SMD_AGGR1_NOC_CLK]	= &msm8998_aggre1_noc_clk.hw,
+	[RPM_SMD_AGGR1_NOC_A_CLK] = &msm8998_aggre1_noc_a_clk.hw,
+	[RPM_SMD_AGGR2_NOC_CLK]	= &msm8998_aggre2_noc_clk.hw,
+	[RPM_SMD_AGGR2_NOC_A_CLK] = &msm8998_aggre2_noc_a_clk.hw,
+	[RPM_SMD_CNOC_CLK]	= &msm8998_cnoc_clk.hw,
+	[RPM_SMD_CNOC_A_CLK]	= &msm8998_cnoc_a_clk.hw,
+	[RPM_SMD_CNOC_PERIPH_CLK] = &msm8998_cnoc_periph_clk.hw,
+	[RPM_SMD_CNOC_PERIPH_A_CLK] = &msm8998_cnoc_periph_a_clk.hw,
+	[RPM_SMD_MMAXI_CLK]	= &msm8998_mmssnoc_axi_rpm_clk.hw,
+	[RPM_SMD_MMAXI_A_CLK]	= &msm8998_mmssnoc_axi_rpm_a_clk.hw,
+	[RPM_SMD_IPA_CLK]	= &msm8998_ipa_clk.hw,
+	[RPM_SMD_IPA_A_CLK]	= &msm8998_ipa_a_clk.hw,
+	[RPM_SMD_CE1_CLK]	= &msm8998_ce1_clk.hw,
+	[RPM_SMD_CE1_A_CLK]	= &msm8998_ce1_a_clk.hw,
+	[RPM_SMD_DIV_CLK1]	= &msm8998_div_clk1.hw,
+	[RPM_SMD_DIV_A_CLK1]	= &msm8998_div_clk1_a.hw,
+	[RPM_SMD_DIV_CLK2]	= &msm8998_div_clk2.hw,
+	[RPM_SMD_DIV_A_CLK2]	= &msm8998_div_clk2_a.hw,
+	[RPM_SMD_DIV_CLK3]	= &msm8998_div_clk3.hw,
+	[RPM_SMD_DIV_A_CLK3]	= &msm8998_div_clk3_a.hw,
+	[RPM_SMD_MMSSNOC_AXI_CLK]	= &mmssnoc_axi_clk.hw,
+	[RPM_SMD_MMSSNOC_AXI_A_CLK]	= &mmssnoc_axi_a_clk.hw,
+	[BIMC_MSMBUS_CLK]	= &bimc_msmbus_clk.hw,
+	[BIMC_MSMBUS_A_CLK]	= &bimc_msmbus_a_clk.hw,
+	[CNOC_MSMBUS_CLK]	= &cnoc_msmbus_clk.hw,
+	[CNOC_MSMBUS_A_CLK]	= &cnoc_msmbus_a_clk.hw,
+	[MCD_CE1_CLK]		= &mcd_ce1_clk.hw,
+	[QCEDEV_CE1_CLK]	= &qcedev_ce1_clk.hw,
+	[QCRYPTO_CE1_CLK]	= &qcrypto_ce1_clk.hw,
+	[QSEECOM_CE1_CLK]	= &qseecom_ce1_clk.hw,
+	[SCM_CE1_CLK]		= &scm_ce1_clk.hw,
+	[SNOC_MSMBUS_CLK]	= &snoc_msmbus_clk.hw,
+	[SNOC_MSMBUS_A_CLK]	= &snoc_msmbus_a_clk.hw,
+	[CNOC_KEEPALIVE_A_CLK] = &cnoc_periph_keepalive_a_clk.hw,
+	[AGGR1_NOC_MSMBUS_CLK] = &aggre1_noc_msmbus_clk.hw,
+	[AGGR1_NOC_MSMBUS_A_CLK] = &aggre1_noc_msmbus_a_clk.hw,
+	[AGGR1_NOC_SMMU_CLK]	= &aggre1_noc_smmu_clk.hw,
+	[AGGR1_NOC_USB_CLK]	= &aggre1_noc_usb_clk.hw,
+	[AGGR2_NOC_MSMBUS_CLK] = &aggre2_noc_msmbus_clk.hw,
+	[AGGR2_NOC_MSMBUS_A_CLK] = &aggre2_noc_msmbus_a_clk.hw,
+	[AGGR2_NOC_SMMU_CLK]	= &aggre2_noc_smmu_clk.hw,
+	[AGGR2_NOC_USB_CLK]	= &aggre2_noc_usb_clk.hw,
+	[CXO_SMD_DWC3_CLK]	= &bi_tcxo_dwc3_clk.hw,
+	[CXO_SMD_LPM_CLK]	= &bi_tcxo_lpm_clk.hw,
+	[CXO_SMD_OTG_CLK]	= &bi_tcxo_otg_clk.hw,
+	[CXO_SMD_PIL_LPASS_CLK]	= &bi_tcxo_pil_lpass_clk.hw,
+	[CXO_SMD_PIL_SSC_CLK]	= &bi_tcxo_pil_ssc_clk.hw,
+	[CXO_SMD_PIL_SPSS_CLK]	= &bi_tcxo_pil_spss_clk.hw,
+};
+
+static const struct rpm_smd_clk_desc rpm_clk_msm8998 = {
+	.clks = msm8998_clks,
+	.num_rpm_clks = RPM_SMD_CNOC_PERIPH_A_CLK,
+	.num_clks = ARRAY_SIZE(msm8998_clks),
+};
+
 static const struct of_device_id rpm_smd_clk_match_table[] = {
 	{ .compatible = "qcom,rpmcc-msm8916", .data = &rpm_clk_msm8916 },
 	{ .compatible = "qcom,rpmcc-msm8974", .data = &rpm_clk_msm8974 },
 	{ .compatible = "qcom,rpmcc-msm8996", .data = &rpm_clk_msm8996 },
+	{ .compatible = "qcom,rpmcc-msm8998", .data = &rpm_clk_msm8998 },
 	{ .compatible = "qcom,rpmcc-bengal", .data = &rpm_clk_bengal},
 	{ .compatible = "qcom,rpmcc-scuba", .data = &rpm_clk_scuba},
 	{ .compatible = "qcom,rpmcc-sdm660",  .data = &rpm_clk_sdm660  },
@@ -1201,7 +1342,7 @@ static int rpm_smd_clk_probe(struct platform_device *pdev)
 	struct clk *clk;
 	struct rpm_cc *rcc;
 	struct clk_onecell_data *data;
-	int ret, is_bengal, is_scuba, is_sdm660, is_qm215, is_sdm439;
+	int ret, is_bengal, is_scuba, is_sdm660, is_msm8998, is_qm215, is_sdm439;
 	size_t num_clks, i;
 	struct clk_hw **hw_clks;
 	const struct rpm_smd_clk_desc *desc;
@@ -1220,6 +1361,9 @@ static int rpm_smd_clk_probe(struct platform_device *pdev)
 	is_sdm660 = of_device_is_compatible(pdev->dev.of_node,
 						"qcom,rpmcc-sdm660");
 
+	is_msm8998 = of_device_is_compatible(pdev->dev.of_node,
+						"qcom,rpmcc-msm8998");
+
 	is_qm215 = of_device_is_compatible(pdev->dev.of_node,
 						"qcom,rpmcc-qm215");
 
@@ -1228,6 +1372,12 @@ static int rpm_smd_clk_probe(struct platform_device *pdev)
 
 	if (is_sdm660) {
 		ret = clk_vote_bimc(&sdm660_bimc_clk.hw, INT_MAX);
+		if (ret < 0)
+			return ret;
+	}
+
+	if (is_msm8998) {
+		ret = clk_vote_bimc(&msm8998_bimc_clk.hw, INT_MAX);
 		if (ret < 0)
 			return ret;
 	}
@@ -1322,6 +1472,16 @@ static int rpm_smd_clk_probe(struct platform_device *pdev)
 		clk_prepare_enable(snoc_keepalive_a_clk.hw.clk);
 	} else if (is_sdm660) {
 		clk_prepare_enable(sdm660_cxo_a.hw.clk);
+
+		/* Hold an active set vote for the cnoc_periph resource */
+		clk_set_rate(cnoc_periph_keepalive_a_clk.hw.clk, 19200000);
+		clk_prepare_enable(cnoc_periph_keepalive_a_clk.hw.clk);
+	} else if (is_msm8998) {
+		/*
+		 * Keep an active vote on bi_tcxo in case no other driver
+		 * votes for it.
+		 */
+		clk_prepare_enable(msm8998_bi_tcxo_ao.hw.clk);
 
 		/* Hold an active set vote for the cnoc_periph resource */
 		clk_set_rate(cnoc_periph_keepalive_a_clk.hw.clk, 19200000);
