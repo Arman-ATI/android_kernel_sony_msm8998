@@ -1301,7 +1301,14 @@ static int32_t msm_flash_platform_probe(struct platform_device *pdev)
 	media_entity_pads_init(&flash_ctrl->msm_sd.sd.entity, 0, NULL);
 	flash_ctrl->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_FLASH;
 	flash_ctrl->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x1;
-	msm_sd_register(&flash_ctrl->msm_sd);
+	rc = msm_sd_register(&flash_ctrl->msm_sd);
+	if (rc) {
+		platform_set_drvdata(pdev, NULL);
+		kfree(flash_ctrl->flash_i2c_client.cci_client);
+		kfree(flash_ctrl->power_info.gpio_conf);
+		kfree(flash_ctrl);
+		return rc;
+	}
 
 	CDBG("%s:%d flash sd name = %s", __func__, __LINE__,
 		flash_ctrl->msm_sd.sd.entity.name);
