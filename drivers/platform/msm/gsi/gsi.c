@@ -57,6 +57,31 @@ static bool running_emulation;
 
 struct gsi_ctx *gsi_ctx;
 
+static bool gsi_msm8998_channel_state_lost(struct gsi_chan_ctx *ctx)
+{
+	return of_machine_is_compatible("qcom,msm8998") &&
+		gsi_ctx->per.ver == GSI_VER_1_0 && ctx->allocated &&
+		ctx->state == GSI_CHAN_STATE_NOT_ALLOCATED;
+}
+
+static void gsi_release_channel_ctx(struct gsi_chan_ctx *ctx)
+{
+	if (!ctx->allocated)
+		return;
+
+	kfree(ctx->user_data);
+	ctx->user_data = NULL;
+	ctx->allocated = false;
+	if (ctx->evtr && ctx->props.prot != GSI_CHAN_PROT_GCI)
+		atomic_dec(&ctx->evtr->chan_ref_cnt);
+	atomic_dec(&gsi_ctx->num_chan);
+
+	if (ctx->props.prot == GSI_CHAN_PROT_GCI) {
+		gsi_ctx->coal_info.ch_id = GSI_CHAN_MAX;
+		gsi_ctx->coal_info.evchid = GSI_EVT_RING_MAX;
+	}
+}
+
 static void __gsi_config_type_irq(int ee, uint32_t mask, uint32_t val)
 {
 	uint32_t curr;
@@ -264,6 +289,8 @@ static void gsi_channel_state_change_wait(unsigned long chan_hdl,
 		GSI_EE_n_GSI_CH_k_CNTXT_0_CHSTATE_SHFT;
 	GSIDBG("Channel state change timeout, curr ch_state=%d\n",
 		ctx->state);
+	if (op == GSI_CH_STOP && gsi_msm8998_channel_state_lost(ctx))
+		return;
 	GSI_ASSERT();
 }
 
@@ -2949,6 +2976,11 @@ int gsi_stop_channel(unsigned long chan_hdl)
 	}
 
 	ctx = &gsi_ctx->chan[chan_hdl];
+	if (gsi_msm8998_channel_state_lost(ctx)) {
+		GSIDBG("chan_hdl=%lu firmware state already released\n",
+			chan_hdl);
+		return GSI_STATUS_SUCCESS;
+	}
 
 	if (ctx->state == GSI_CHAN_STATE_STOPPED) {
 		GSIDBG("chan_hdl=%lu already stopped\n", chan_hdl);
@@ -2991,8 +3023,12 @@ int gsi_stop_channel(unsigned long chan_hdl)
 	if (ctx->state != GSI_CHAN_STATE_STOPPED &&
 		ctx->state != GSI_CHAN_STATE_STOP_IN_PROC) {
 		GSIERR("chan=%lu unexpected state=%u\n", chan_hdl, ctx->state);
-		res = -GSI_STATUS_BAD_STATE;
-		BUG();
+		if (gsi_msm8998_channel_state_lost(ctx))
+			res = GSI_STATUS_SUCCESS;
+		else {
+			res = -GSI_STATUS_BAD_STATE;
+			BUG();
+		}
 		goto free_lock;
 	}
 
@@ -3108,6 +3144,8 @@ int gsi_reset_channel(unsigned long chan_hdl)
 	if (ctx->state != GSI_CHAN_STATE_STOPPED &&
 		ctx->state != GSI_CHAN_STATE_ALLOCATED) {
 		GSIERR("bad state %d\n", ctx->state);
+		if (gsi_msm8998_channel_state_lost(ctx))
+			return GSI_STATUS_SUCCESS;
 		return -GSI_STATUS_UNSUPPORTED_OP;
 	}
 
@@ -3197,6 +3235,13 @@ int gsi_dealloc_channel(unsigned long chan_hdl)
 
 	if (ctx->state != GSI_CHAN_STATE_ALLOCATED) {
 		GSIERR("bad state %d\n", ctx->state);
+		mutex_lock(&gsi_ctx->mlock);
+		if (gsi_msm8998_channel_state_lost(ctx)) {
+			gsi_release_channel_ctx(ctx);
+			mutex_unlock(&gsi_ctx->mlock);
+			return GSI_STATUS_SUCCESS;
+		}
+		mutex_unlock(&gsi_ctx->mlock);
 		return -GSI_STATUS_UNSUPPORTED_OP;
 	}
 
@@ -3225,24 +3270,16 @@ int gsi_dealloc_channel(unsigned long chan_hdl)
 			GSI_ASSERT();
 		}
 
+		gsi_release_channel_ctx(ctx);
 		mutex_unlock(&gsi_ctx->mlock);
 	} else {
 		mutex_lock(&gsi_ctx->mlock);
 		GSIDBG("In GSI_VER_2_2 channel deallocation not supported\n");
 		ctx->state = GSI_CHAN_STATE_NOT_ALLOCATED;
 		GSIDBG("chan_hdl=%lu Channel state = %u\n", chan_hdl,
-								ctx->state);
+							ctx->state);
+		gsi_release_channel_ctx(ctx);
 		mutex_unlock(&gsi_ctx->mlock);
-	}
-	kfree(ctx->user_data);
-	ctx->allocated = false;
-	if (ctx->evtr && (ctx->props.prot != GSI_CHAN_PROT_GCI))
-		atomic_dec(&ctx->evtr->chan_ref_cnt);
-	atomic_dec(&gsi_ctx->num_chan);
-
-	if (ctx->props.prot == GSI_CHAN_PROT_GCI) {
-		gsi_ctx->coal_info.ch_id = GSI_CHAN_MAX;
-		gsi_ctx->coal_info.evchid = GSI_EVT_RING_MAX;
 	}
 	return GSI_STATUS_SUCCESS;
 }
