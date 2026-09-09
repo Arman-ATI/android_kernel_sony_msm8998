@@ -3877,13 +3877,12 @@ static int __early_init_resources(struct venus_hfi_device *device,
 	rc = __init_regulators(device);
 	if (rc) {
 		dprintk(VIDC_ERR, "Failed to get all regulators\n");
-		return -ENODEV;
+		return rc;
 	}
 
 	rc = __init_clocks(device);
 	if (rc) {
 		dprintk(VIDC_ERR, "Failed to init clocks\n");
-		rc = -ENODEV;
 		goto err_init_clocks;
 	}
 
@@ -4594,7 +4593,8 @@ static int venus_hfi_core_early_init(void *device)
 
 	mutex_lock(&dev->lock);
 	rc = __early_init_resources(dev, dev->res);
-	rc = __venus_early_power_on(device);
+	if (!rc)
+		rc = __venus_early_power_on(device);
 	mutex_unlock(&dev->lock);
 	return rc;
 }
@@ -4672,4 +4672,3 @@ int venus_hfi_initialize(struct hfi_device *hdev, u32 device_id,
 err_venus_hfi_init:
 	return rc;
 }
-
