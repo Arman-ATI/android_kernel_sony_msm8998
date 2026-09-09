@@ -724,6 +724,56 @@ static int clk_rcg2_set_floor_rate_and_parent(struct clk_hw *hw,
 	return __clk_rcg2_set_rate(hw, rate, FLOOR);
 }
 
+static void clk_rcg2_reconfigure(struct clk_hw *hw)
+{
+	struct clk_hw *parent = clk_hw_get_parent(hw);
+	int num_parents = clk_hw_get_num_parents(hw);
+	unsigned long rate, parent_rate;
+	int ret, i;
+
+	if (!hw->init->ops->set_rate || !hw->init->ops->set_parent)
+		return;
+
+	if (!parent) {
+		pr_err("RCG parent isn't initialized\n");
+		return;
+	}
+
+	rate = clk_hw_get_rate(hw);
+	if (!rate || rate == cxo_f.freq)
+		return;
+
+	parent_rate = clk_hw_get_rate(parent);
+	if (!parent_rate)
+		return;
+
+	for (i = 0; i < num_parents; i++) {
+		if (parent != clk_hw_get_parent_by_index(hw, i))
+			continue;
+
+		ret = hw->init->ops->set_parent(hw, i);
+		if (ret)
+			pr_warn("%s: failed to reconfigure %s parent: %d\n",
+				__func__, clk_hw_get_name(hw), ret);
+		break;
+	}
+
+	ret = hw->init->ops->set_rate(hw, rate, parent_rate);
+	if (ret)
+		pr_warn("%s: failed to reconfigure %s rate: %d\n",
+			__func__, clk_hw_get_name(hw), ret);
+}
+
+static int clk_rcg2_prepare(struct clk_hw *hw)
+{
+	struct clk_rcg2 *rcg = to_clk_rcg2(hw);
+
+	if (rcg->flags & RECONFIGURE_RCG)
+		clk_rcg2_reconfigure(hw);
+
+	return 0;
+}
+
 static int clk_rcg2_enable(struct clk_hw *hw)
 {
 	struct clk_rcg2 *rcg = to_clk_rcg2(hw);
@@ -805,6 +855,7 @@ static void clk_rcg2_disable(struct clk_hw *hw)
 
 const struct clk_ops clk_rcg2_ops = {
 	.is_enabled = clk_rcg2_is_enabled,
+	.prepare = clk_rcg2_prepare,
 	.enable = clk_rcg2_enable,
 	.disable = clk_rcg2_disable,
 	.get_parent = clk_rcg2_get_parent,
@@ -1015,6 +1066,7 @@ static int clk_byte_set_rate_and_parent(struct clk_hw *hw,
 
 const struct clk_ops clk_byte_ops = {
 	.is_enabled = clk_rcg2_is_enabled,
+	.prepare = clk_rcg2_prepare,
 	.get_parent = clk_rcg2_get_parent,
 	.set_parent = clk_rcg2_set_parent,
 	.recalc_rate = clk_rcg2_recalc_rate,
@@ -1089,6 +1141,7 @@ static int clk_byte2_set_rate_and_parent(struct clk_hw *hw,
 
 const struct clk_ops clk_byte2_ops = {
 	.is_enabled = clk_rcg2_is_enabled,
+	.prepare = clk_rcg2_prepare,
 	.get_parent = clk_rcg2_get_parent,
 	.set_parent = clk_rcg2_set_parent,
 	.recalc_rate = clk_rcg2_recalc_rate,
@@ -1184,6 +1237,7 @@ static int clk_pixel_set_rate_and_parent(struct clk_hw *hw, unsigned long rate,
 
 const struct clk_ops clk_pixel_ops = {
 	.is_enabled = clk_rcg2_is_enabled,
+	.prepare = clk_rcg2_prepare,
 	.get_parent = clk_rcg2_get_parent,
 	.set_parent = clk_rcg2_set_parent,
 	.recalc_rate = clk_rcg2_recalc_rate,
