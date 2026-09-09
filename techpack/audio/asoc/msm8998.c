@@ -34,7 +34,7 @@
 #include <dsp/q6afe-v2.h>
 #include <dsp/q6core.h>
 #include "msm-pcm-routing-v2.h"
-#include "codecs/msm-cdc-pinctrl.h"
+#include <asoc/msm-cdc-pinctrl.h>
 #include "codecs/wcd9335.h"
 #include "codecs/wcd934x/wcd934x.h"
 #include "codecs/wcd934x/wcd934x-mbhc.h"
@@ -184,9 +184,9 @@ struct msm_asoc_mach_data {
 };
 
 struct msm_asoc_wcd93xx_codec {
-	void* (*get_afe_config_fn)(struct snd_soc_codec *codec,
+	void* (*get_afe_config_fn)(struct snd_soc_component *codec,
 				   enum afe_config_type config_type);
-	void (*mbhc_hs_detect_exit)(struct snd_soc_codec *codec);
+	void (*mbhc_hs_detect_exit)(struct snd_soc_component *codec);
 };
 
 static const char *const pin_states[] = {"sleep", "i2s-active",
@@ -513,7 +513,7 @@ static struct msm_asoc_wcd93xx_codec msm_codec_fn;
 
 static void *def_tasha_mbhc_cal(void);
 static void *def_tavil_mbhc_cal(void);
-static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec,
+static int msm_snd_enable_codec_ext_clk(struct snd_soc_component *codec,
 					int enable, bool dapm);
 static int msm_wsa881x_init(struct snd_soc_component *component);
 
@@ -2538,10 +2538,10 @@ static int msm_mi2s_tx_format_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int msm_hifi_ctrl(struct snd_soc_codec *codec)
+static int msm_hifi_ctrl(struct snd_soc_component *codec)
 {
-	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
-	struct snd_soc_card *card = codec->component.card;
+	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(codec);
+	struct snd_soc_card *card = codec->card;
 	struct msm_asoc_mach_data *pdata =
 				snd_soc_card_get_drvdata(card);
 
@@ -2577,7 +2577,7 @@ static int msm_hifi_get(struct snd_kcontrol *kcontrol,
 static int msm_hifi_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+	struct snd_soc_component *codec = snd_soc_kcontrol_component(kcontrol);
 
 	pr_debug("%s() ucontrol->value.integer.value[0] = %ld\n",
 		 __func__, ucontrol->value.integer.value[0]);
@@ -2810,7 +2810,7 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_hifi_put),
 };
 
-static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec,
+static int msm_snd_enable_codec_ext_clk(struct snd_soc_component *codec,
 					int enable, bool dapm)
 {
 	int ret = 0;
@@ -2827,7 +2827,7 @@ static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec,
 	return ret;
 }
 
-static int msm_snd_enable_codec_ext_tx_clk(struct snd_soc_codec *codec,
+static int msm_snd_enable_codec_ext_tx_clk(struct snd_soc_component *codec,
 					   int enable, bool dapm)
 {
 	int ret = 0;
@@ -2845,7 +2845,7 @@ static int msm_snd_enable_codec_ext_tx_clk(struct snd_soc_codec *codec,
 static int msm_mclk_tx_event(struct snd_soc_dapm_widget *w,
 				 struct snd_kcontrol *kcontrol, int event)
 {
-	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
+	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
 
 	pr_debug("%s: event = %d\n", __func__, event);
 
@@ -2861,7 +2861,7 @@ static int msm_mclk_tx_event(struct snd_soc_dapm_widget *w,
 static int msm_mclk_event(struct snd_soc_dapm_widget *w,
 				 struct snd_kcontrol *kcontrol, int event)
 {
-	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
+	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
 
 	pr_debug("%s: event = %d\n", __func__, event);
 
@@ -2877,8 +2877,8 @@ static int msm_mclk_event(struct snd_soc_dapm_widget *w,
 static int msm_hifi_ctrl_event(struct snd_soc_dapm_widget *w,
 			       struct snd_kcontrol *k, int event)
 {
-	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
-	struct snd_soc_card *card = codec->component.card;
+	struct snd_soc_component *codec = snd_soc_dapm_to_component(w->dapm);
+	struct snd_soc_card *card = codec->card;
 	struct msm_asoc_mach_data *pdata =
 				snd_soc_card_get_drvdata(card);
 
@@ -3029,7 +3029,7 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	int rc = 0;
 	int idx;
 	void *config = NULL;
-	struct snd_soc_codec *codec = NULL;
+	struct snd_soc_component *codec = NULL;
 
 	pr_debug("%s: format = %d, rate = %d\n",
 		  __func__, params_format(params), params_rate(params));
@@ -3079,7 +3079,7 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 		break;
 
 	case MSM_BACKEND_DAI_SLIMBUS_5_TX:
-		codec = rtd->codec;
+		codec = rtd->codec_dai->component;
 		rate->min = rate->max = SAMPLING_RATE_16KHZ;
 		channels->min = channels->max = 1;
 
@@ -3342,9 +3342,9 @@ done:
 	return rc;
 }
 
-static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
+static bool msm_swap_gnd_mic(struct snd_soc_component *codec, bool active)
 {
-	struct snd_soc_card *card = codec->component.card;
+	struct snd_soc_card *card = codec->card;
 	struct msm_asoc_mach_data *pdata =
 				snd_soc_card_get_drvdata(card);
 	int value = 0;
@@ -3365,7 +3365,7 @@ static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 	return true;
 }
 
-static int msm_afe_set_config(struct snd_soc_codec *codec)
+static int msm_afe_set_config(struct snd_soc_component *codec)
 {
 	int ret = 0;
 	void *config_data = NULL;
@@ -3420,7 +3420,7 @@ static void msm_afe_clear_config(void)
 	afe_clear_config(AFE_SLIMBUS_SLAVE_CONFIG);
 }
 
-static int msm_adsp_power_up_config(struct snd_soc_codec *codec)
+static int msm_adsp_power_up_config(struct snd_soc_component *codec)
 {
 	int ret = 0;
 	unsigned long timeout;
@@ -3467,7 +3467,7 @@ static int msm8998_notifier_service_cb(struct notifier_block *this,
 	struct snd_soc_card *card = NULL;
 	const char *be_dl_name = LPASS_BE_SLIMBUS_0_RX;
 	struct snd_soc_pcm_runtime *rtd;
-	struct snd_soc_codec *codec;
+	struct snd_soc_component *codec;
 
 	pr_debug("%s: Service opcode 0x%lx\n", __func__, opcode);
 
@@ -3500,7 +3500,7 @@ static int msm8998_notifier_service_cb(struct notifier_block *this,
 			ret = -EINVAL;
 			goto done;
 		}
-		codec = rtd->codec;
+		codec = rtd->codec_dai->component;
 
 		ret = msm_adsp_power_up_config(codec);
 		if (ret < 0) {
@@ -3526,8 +3526,8 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret = 0;
 	void *config_data;
-	struct snd_soc_codec *codec = rtd->codec;
-	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
+	struct snd_soc_component *codec = rtd->codec_dai->component;
+	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(codec);
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_component *aux_comp;
@@ -3563,7 +3563,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 
 	rtd->pmdown_time = 0;
 
-	ret = snd_soc_add_codec_controls(codec, msm_snd_controls,
+	ret = snd_soc_add_component_controls(codec, msm_snd_controls,
 					 ARRAY_SIZE(msm_snd_controls));
 	if (ret < 0) {
 		pr_err("%s: add_codec_controls failed, err %d\n",
@@ -3690,9 +3690,9 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 					struct snd_soc_component, card_aux_list);
 			if (!strcmp(aux_comp->name, WSA8810_NAME_1) ||
 			    !strcmp(aux_comp->name, WSA8810_NAME_2)) {
-				tavil_set_spkr_mode(rtd->codec,
+				tavil_set_spkr_mode(rtd->codec_dai->component,
 						    WCD934X_SPKR_MODE_1);
-				tavil_set_spkr_gain_offset(rtd->codec,
+				tavil_set_spkr_gain_offset(rtd->codec_dai->component,
 						WCD934X_RX_GAIN_OFFSET_M1P5_DB);
 			}
 		}
@@ -3714,8 +3714,9 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 					struct snd_soc_component, card_aux_list);
 			if (!strcmp(aux_comp->name, WSA8810_NAME_1) ||
 			    !strcmp(aux_comp->name, WSA8810_NAME_2)) {
-				tasha_set_spkr_mode(rtd->codec, SPKR_MODE_1);
-				tasha_set_spkr_gain_offset(rtd->codec,
+				tasha_set_spkr_mode(rtd->codec_dai->component,
+						    SPKR_MODE_1);
+				tasha_set_spkr_gain_offset(rtd->codec_dai->component,
 							RX_GAIN_OFFSET_M1P5_DB);
 			}
 		}
@@ -6609,7 +6610,7 @@ static int msm_snd_card_late_probe(struct snd_soc_card *card)
 		goto err_mbhc_cal;
 	}
 	wcd_mbhc_cfg.calibration = mbhc_calibration;
-	ret = tasha_mbhc_hs_detect(rtd->codec, &wcd_mbhc_cfg);
+	ret = tasha_mbhc_hs_detect(rtd->codec_dai->component, &wcd_mbhc_cfg);
 	if (ret) {
 		dev_err(card->dev, "%s: mbhc hs detect failed, err:%d\n",
 			__func__, ret);
@@ -6646,7 +6647,7 @@ static int msm_snd_card_tavil_late_probe(struct snd_soc_card *card)
 		goto err_mbhc_cal;
 	}
 	wcd_mbhc_cfg.calibration = mbhc_calibration;
-	ret = tavil_mbhc_hs_detect(rtd->codec, &wcd_mbhc_cfg);
+	ret = tavil_mbhc_hs_detect(rtd->codec_dai->component, &wcd_mbhc_cfg);
 	if (ret) {
 		dev_err(card->dev, "%s: mbhc hs detect failed, err:%d\n",
 			__func__, ret);
@@ -6780,10 +6781,10 @@ static int msm_prepare_us_euro(struct snd_soc_card *card)
 static int msm_audrx_stub_init(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret = 0;
-	struct snd_soc_codec *codec = rtd->codec;
-	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
+	struct snd_soc_component *codec = rtd->codec_dai->component;
+	struct snd_soc_dapm_context *dapm = snd_soc_component_get_dapm(codec);
 
-	ret = snd_soc_add_codec_controls(codec, msm_snd_controls,
+	ret = snd_soc_add_component_controls(codec, msm_snd_controls,
 					 ARRAY_SIZE(msm_snd_controls));
 	if (ret < 0) {
 		dev_err(codec->dev, "%s: add_codec_controls failed, err%d\n",
@@ -7066,7 +7067,7 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 	u8 spkright_ports[WSA881X_MAX_SWR_PORTS] = {103, 104, 105, 107};
 	unsigned int ch_rate[WSA881X_MAX_SWR_PORTS] = {2400, 600, 300, 1200};
 	unsigned int ch_mask[WSA881X_MAX_SWR_PORTS] = {0x1, 0xF, 0x3, 0x3};
-	struct snd_soc_codec *codec = snd_soc_component_to_codec(component);
+	struct snd_soc_component *codec = component;
 	struct msm_asoc_mach_data *pdata;
 	struct snd_soc_dapm_context *dapm;
 	int ret = 0;
@@ -7076,11 +7077,11 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 		return -EINVAL;
 	}
 
-	dapm = snd_soc_codec_get_dapm(codec);
+	dapm = snd_soc_component_get_dapm(codec);
 
 	if (!strcmp(component->name_prefix, "SpkrLeft")) {
 		dev_dbg(codec->dev, "%s: setting left ch map to codec %s\n",
-			__func__, codec->component.name);
+			__func__, codec->name);
 		wsa881x_set_channel_map(codec, &spkleft_ports[0],
 				WSA881X_MAX_SWR_PORTS, &ch_mask[0],
 				&ch_rate[0], NULL);
@@ -7090,7 +7091,7 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 		}
 	} else if (!strcmp(component->name_prefix, "SpkrRight")) {
 		dev_dbg(codec->dev, "%s: setting right ch map to codec %s\n",
-			__func__, codec->component.name);
+			__func__, codec->name);
 		wsa881x_set_channel_map(codec, &spkright_ports[0],
 				WSA881X_MAX_SWR_PORTS, &ch_mask[0],
 				&ch_rate[0], NULL);
@@ -7100,7 +7101,7 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 		}
 	} else {
 		dev_err(codec->dev, "%s: wrong codec name %s\n", __func__,
-			codec->component.name);
+			codec->name);
 		ret = -EINVAL;
 		goto err_codec;
 	}
