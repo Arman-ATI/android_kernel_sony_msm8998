@@ -17,6 +17,7 @@
 #include <linux/clk-provider.h>
 #include <linux/cpu.h>
 #include <linux/platform_device.h>
+#include <linux/of_device.h>
 #include <linux/of_platform.h>
 #include <linux/pm_opp.h>
 #include <linux/pm_qos.h>
@@ -790,24 +791,39 @@ static const char * const gcc_parent_names_1[] = {
 	"hmss_gpll0_clk_src",
 };
 
+static const char * const gcc_parent_names_msm8998[] = {
+	"bi_tcxo_ao",
+	"hmss_gpll0_clk_src",
+};
+
+static const char * const osm_parent_names[] = {
+	"cxo_a",
+};
+
+static const char * const osm_parent_names_msm8998[] = {
+	"bi_tcxo_ao",
+};
+
 static struct freq_tbl ftbl_osm_clk_src[] = {
 	F(200000000, LMH_LITE_CLK_SRC, 1.5, 0, 0),
 	{ }
 };
 
 /* APCS_COMMON_LMH_CMD_RCGR */
+static struct clk_init_data osm_clk_src_init = {
+	.name = "osm_clk_src",
+	.parent_names = gcc_parent_names_1,
+	.num_parents = 2,
+	.ops = &clk_rcg2_ops,
+};
+
 static struct clk_rcg2 osm_clk_src = {
 	.cmd_rcgr = 0x0012c,
 	.mnd_width = 0,
 	.hid_width = 5,
 	.parent_map = gcc_parent_map_1,
 	.freq_tbl = ftbl_osm_clk_src,
-	.clkr.hw.init = &(struct clk_init_data){
-		.name = "osm_clk_src",
-		.parent_names = gcc_parent_names_1,
-		.num_parents = 2,
-		.ops = &clk_rcg2_ops,
-	},
+	.clkr.hw.init = &osm_clk_src_init,
 };
 
 static struct clk_fixed_factor sys_apcsaux_clk_gcc = {
@@ -817,6 +833,7 @@ static struct clk_fixed_factor sys_apcsaux_clk_gcc = {
 		.name = "sys_apcsaux_clk_gcc",
 		.parent_names = (const char *[]){ "hmss_gpll0_clk_src" },
 		.num_parents = 1,
+		.flags = CLK_SET_RATE_PARENT,
 		.ops = &clk_fixed_factor_ops,
 	},
 };
@@ -824,13 +841,13 @@ static struct clk_fixed_factor sys_apcsaux_clk_gcc = {
 static struct clk_init_data osm_clks_init[] = {
 	[0] = {
 		.name = "pwrcl_clk",
-		.parent_names = (const char *[]){ "cxo_a" },
+		.parent_names = osm_parent_names,
 		.num_parents = 1,
 		.ops = &clk_ops_cpu_osm_660,
 	},
 	[1] = {
 		.name = "perfcl_clk",
-		.parent_names = (const char *[]){ "cxo_a" },
+		.parent_names = osm_parent_names,
 		.num_parents = 1,
 		.ops = &clk_ops_cpu_osm_660,
 	},
@@ -960,7 +977,7 @@ static int clk_osm_get_lut(struct platform_device *pdev,
 			last_entry = true;
 		}
 	}
-	fmax_temp[k] = abs_fmax;
+	fmax_temp[k++] = abs_fmax;
 
 	osm_clks_init[c->cluster_num].rate_max = devm_kzalloc(&pdev->dev,
 						 k * sizeof(unsigned long),
@@ -3038,6 +3055,8 @@ static int clk_osm_panic_callback(struct notifier_block *nfb,
 	return NOTIFY_OK;
 }
 
+static bool clear_acd_init;
+
 static int clk_osm_acd_init(struct clk_osm *c)
 {
 
@@ -3110,19 +3129,53 @@ static int clk_osm_acd_init(struct clk_osm *c)
 	auto_xfer_mask |= ACD_REG_RELATIVE_ADDR_BITMASK(ACD_GFMUX_CFG);
 	clk_osm_acd_master_write_reg(c, auto_xfer_mask, ACD_AUTOXFER_CFG);
 
+	if (clear_acd_init)
+		c->acd_init = false;
+
 	return 0;
 }
 
+struct clk_cpu_osm_data {
+	const char * const *gcc_parent_names;
+	const char * const *osm_parent_names;
+	const char *pwrcl_crossover_property;
+	unsigned long pwrcl_boot_rate;
+	unsigned long perfcl_boot_rate;
+	bool clear_acd_init;
+};
+
+static const struct clk_cpu_osm_data osm_data = {
+	.gcc_parent_names = gcc_parent_names_1,
+	.osm_parent_names = osm_parent_names,
+	.pwrcl_boot_rate = 1401600000,
+	.perfcl_boot_rate = 1747200000,
+};
+
+static const struct clk_cpu_osm_data sdm630_osm_data = {
+	.gcc_parent_names = gcc_parent_names_1,
+	.osm_parent_names = osm_parent_names,
+	.pwrcl_boot_rate = 1382400000,
+	.perfcl_boot_rate = 1670400000,
+};
+
+static const struct clk_cpu_osm_data msm8998_osm_data = {
+	.gcc_parent_names = gcc_parent_names_msm8998,
+	.osm_parent_names = osm_parent_names_msm8998,
+	.pwrcl_crossover_property =
+		"qcom,pwrcl-apcs-mem-acc-threshold-voltage",
+	.pwrcl_boot_rate = 1555200000,
+	.perfcl_boot_rate = 1728000000,
+	.clear_acd_init = true,
+};
+
 static unsigned long init_rate = 300000000;
 static unsigned long osm_clk_init_rate = 200000000;
-static unsigned long pwrcl_boot_rate = 1401600000;
-static unsigned long perfcl_boot_rate = 1747200000;
 
 static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 {
+	const struct clk_cpu_osm_data *data;
 	int rc = 0, cpu, i;
 	int speedbin = 0, pvs_ver = 0;
-	bool is_sdm630 = false;
 	u32 pte_efuse;
 	int num_clks = ARRAY_SIZE(osm_qcom_clk_hws);
 	struct clk *clk;
@@ -3134,6 +3187,15 @@ static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 	struct cpu_cycle_counter_cb cb = {
 		.get_cpu_cycle_counter = clk_osm_get_cpu_cycle_counter,
 	};
+
+	data = of_device_get_match_data(&pdev->dev);
+	if (!data)
+		return -EINVAL;
+
+	osm_clk_src_init.parent_names = data->gcc_parent_names;
+	osm_clks_init[0].parent_names = data->osm_parent_names;
+	osm_clks_init[1].parent_names = data->osm_parent_names;
+	clear_acd_init = data->clear_acd_init;
 
 	/*
 	 * Require the RPM-XO clock and GCC-HMSS-GPLL0 clocks to be registererd
@@ -3235,7 +3297,8 @@ static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	rc = clk_osm_resolve_crossover_corners(&pwrcl_clk, pdev, NULL);
+	rc = clk_osm_resolve_crossover_corners(&pwrcl_clk, pdev,
+					       data->pwrcl_crossover_property);
 	if (rc)
 		dev_info(&pdev->dev, "No APM crossover corner programmed\n");
 
@@ -3384,22 +3447,15 @@ static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 		     "Failed to enable clock for cpu %d\n", cpu);
 	}
 
-	is_sdm630 = of_device_is_compatible(pdev->dev.of_node,
-					"qcom,clk-cpu-osm-sdm630");
-	if (is_sdm630) {
-		pwrcl_boot_rate = 1382400000;
-		perfcl_boot_rate = 1670400000;
-	}
-
 	/* Set final boot rate */
-	rc = clk_set_rate(pwrcl_clk.hw.clk, pwrcl_boot_rate);
+	rc = clk_set_rate(pwrcl_clk.hw.clk, data->pwrcl_boot_rate);
 	if (rc) {
 		dev_err(&pdev->dev, "Unable to set boot rate on pwr cluster, rc=%d\n",
 			rc);
 		goto exit2;
 	}
 
-	rc = clk_set_rate(perfcl_clk.hw.clk, perfcl_boot_rate);
+	rc = clk_set_rate(perfcl_clk.hw.clk, data->perfcl_boot_rate);
 	if (rc) {
 		dev_err(&pdev->dev, "Unable to set boot rate on perf cluster, rc=%d\n",
 			rc);
@@ -3427,8 +3483,13 @@ exit:
 }
 
 static const struct of_device_id match_table[] = {
-	{ .compatible = "qcom,clk-cpu-osm" },
-	{ .compatible = "qcom,clk-cpu-osm-sdm630" },
+	{ .compatible = "qcom,clk-cpu-osm", .data = &osm_data },
+	{ .compatible = "qcom,clk-cpu-osm-sdm630",
+	  .data = &sdm630_osm_data },
+	{ .compatible = "qcom,clk-cpu-osm-msm8998-v1",
+	  .data = &msm8998_osm_data },
+	{ .compatible = "qcom,clk-cpu-osm-msm8998-v2",
+	  .data = &msm8998_osm_data },
 	{}
 };
 
