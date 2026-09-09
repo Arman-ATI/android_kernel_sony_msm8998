@@ -4110,6 +4110,8 @@ init_mpq_feed_end:
 	return ret;
 }
 
+MODULE_LICENSE("GPL");
+
 /**
  * Note: Called only when filter is in "GO" state - after feed has been started.
  */
