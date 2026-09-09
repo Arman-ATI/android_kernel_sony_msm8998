@@ -1098,6 +1098,17 @@ config REGULATOR_CPR3
 	  or decrease requests all the way to the PMIC without software
 	  involvement.
 
+config REGULATOR_CPR3_MMSS
+	bool "RBCPR3 regulator for MMSS"
+	depends on OF
+	select REGULATOR_CPR3
+	help
+	  This driver supports Qualcomm Technologies, Inc. MMSS graphics
+	  processor specific features. The MMSS CPR3 controller only uses one
+	  thread to monitor the MMSS voltage requirements. This driver reads
+	  initial voltage values out of hardware fuses and CPR target quotient
+	  values out of device tree.
+
 config REGULATOR_CPR4_MMSS_LDO
 	bool "RBCPR3 regulator for MMSS LDO"
 	depends on OF
