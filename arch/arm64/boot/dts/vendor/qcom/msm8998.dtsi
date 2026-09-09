@@ -773,7 +773,7 @@
 			<0x800a000 0x3000>;
 		reg-names = "core", "chnls", "obsrvr", "intr", "cnfg";
 		interrupt-names = "periph_irq";
-		interrupts = <GIC_SPI 326 IRQ_TYPE_NONE>;
+		interrupts = <GIC_SPI 326 IRQ_TYPE_LEVEL_HIGH>;
 		qcom,ee = <0>;
 		qcom,channel = <0>;
 		qcom,reserved-chan = <511>;
@@ -793,7 +793,7 @@
 	uartblsp1dm1: serial@0c170000 {
 		compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
 		reg = <0xc170000 0x1000>;
-		interrupts = <0 108 0>;
+		interrupts = <0 108 IRQ_TYPE_LEVEL_HIGH>;
 		status = "disabled";
 		clocks = <&clock_gcc GCC_BLSP1_UART2_APPS_CLK>,
 			 <&clock_gcc GCC_BLSP1_AHB_CLK>;
@@ -803,7 +803,7 @@
 	uartblsp2dm1: serial@0c1b0000 {
 		compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
 		reg = <0xc1b0000 0x1000>;
-		interrupts = <0 114 0>;
+		interrupts = <0 114 IRQ_TYPE_LEVEL_HIGH>;
 		status = "disabled";
 		clocks = <&clock_gcc GCC_BLSP2_UART2_APPS_CLK>,
 			 <&clock_gcc GCC_BLSP2_AHB_CLK>;
@@ -992,7 +992,7 @@
 		reg = <0x171c0000 0x2C000>,
 			<0x17184000 0x32000>;
 		reg-names = "slimbus_physical", "slimbus_bam_physical";
-		interrupts = <0 163 0>, <0 164 0>;
+		interrupts = <0 163 IRQ_TYPE_LEVEL_HIGH>, <0 164 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "slimbus_irq", "slimbus_bam_irq";
 		qcom,apps-ch-pipes = <0x00001f80>;
 		qcom,ea-pc = <0x210>;
@@ -1005,7 +1005,7 @@
 		reg = <0x17240000 0x2C000>,
 			<0x17204000 0x26000>;
 		reg-names = "slimbus_physical", "slimbus_bam_physical";
-		interrupts = <0 291 0>, <0 292 0>;
+		interrupts = <0 291 IRQ_TYPE_LEVEL_HIGH>, <0 292 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "slimbus_irq", "slimbus_bam_irq";
 
 		/* Slimbus Slave DT for WCN3990 */
@@ -1622,7 +1622,7 @@
 		compatible = "qcom,msm-gladiator-v2";
 		reg = <0x17900000 0xe000>;
 		reg-names = "gladiator_base";
-		interrupts = <0 22 0>;
+		interrupts = <0 22 IRQ_TYPE_LEVEL_HIGH>;
 		clock-names = "atb_clk";
 		clocks = <&clock_rpmcc RPM_SMD_QDSS_CLK>;
 	};
@@ -1779,7 +1779,7 @@
 		reg = <0xc0a4900 0x314>, <0xc0a4000 0x800>;
 		reg-names = "hc_mem", "core_mem";
 
-		interrupts = <0 125 0>, <0 221 0>;
+		interrupts = <0 125 IRQ_TYPE_LEVEL_HIGH>, <0 221 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "hc_irq", "pwr_irq";
 
 		clock-names = "iface_clk", "core_clk";
@@ -1941,7 +1941,7 @@
 		#size-cells = <1>;
 		ranges;
 
-		interrupts = <0 347 0>, <0 243 0>,  <0 180 0>;
+		interrupts = <0 347 IRQ_TYPE_LEVEL_HIGH>, <0 243 IRQ_TYPE_LEVEL_HIGH>,  <0 180 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "hs_phy_irq", "ss_phy_irq", "pwr_event_irq";
 
 		USB3_GDSC-supply = <&gdsc_usb30>;
@@ -2378,7 +2378,7 @@
 		      <0x10ab000 0x1000>;
 		reg-names = "tsens_srot_physical",
 			    "tsens_tm_physical";
-		interrupts = <0 458 0>, <0 445 0>;
+		interrupts = <0 458 IRQ_TYPE_LEVEL_HIGH>, <0 445 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "tsens-upper-lower", "tsens-critical";
 		#thermal-sensor-cells = <1>;
 	};
@@ -2389,7 +2389,7 @@
 		      <0x10ae000 0x1000>;
 		reg-names = "tsens_srot_physical",
 			    "tsens_tm_physical";
-		interrupts = <0 184 0>, <0 430 0>;
+		interrupts = <0 184 IRQ_TYPE_LEVEL_HIGH>, <0 430 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "tsens-upper-lower", "tsens-critical";
 		#thermal-sensor-cells = <1>;
 	};
@@ -2459,7 +2459,7 @@
 		reg = <0x1DE0000 0x20000>,
 		      <0x1DC4000 0x24000>;
 		reg-names = "crypto-base","crypto-bam-base";
-		interrupts = <0 206 0>;
+		interrupts = <0 206 IRQ_TYPE_LEVEL_HIGH>;
 		qcom,bam-pipe-pair = <2>;
 		qcom,ce-hw-instance = <0>;
 		qcom,ce-device = <0>;
@@ -2492,7 +2492,7 @@
 		reg = <0x1DE0000 0x20000>,
 		      <0x1DC4000 0x24000>;
 		reg-names = "crypto-base","crypto-bam-base";
-		interrupts = <0 206 0>;
+		interrupts = <0 206 IRQ_TYPE_LEVEL_HIGH>;
 		qcom,bam-pipe-pair = <1>;
 		qcom,ce-hw-instance = <0>;
 		qcom,ce-device = <0>;
@@ -2840,7 +2840,7 @@
 		compatible = "qcom,msm-watchdog";
 		reg = <0x17817000 0x1000>;
 		reg-names = "wdt-base";
-		interrupts = <0 3 0>, <0 4 0>;
+		interrupts = <0 3 IRQ_TYPE_EDGE_RISING>, <0 4 IRQ_TYPE_EDGE_RISING>;
 		qcom,bark-time = <11000>;
 		qcom,pet-time = <10000>;
 		qcom,ipi-ping;
@@ -3060,18 +3060,18 @@
 		clocks = <&clock_rpmcc RPM_SMD_RF_CLK2_PIN>;
 		clock-names = "cxo_ref_clk_pin";
 		interrupts =
-			<0 413 0 /* CE0 */ >,
-			<0 414 0 /* CE1 */ >,
-			<0 415 0 /* CE2 */ >,
-			<0 416 0 /* CE3 */ >,
-			<0 417 0 /* CE4 */ >,
-			<0 418 0 /* CE5 */ >,
-			<0 420 0 /* CE6 */ >,
-			<0 421 0 /* CE7 */ >,
-			<0 422 0 /* CE8 */ >,
-			<0 423 0 /* CE9 */ >,
-			<0 424 0 /* CE10 */ >,
-			<0 425 0 /* CE11 */ >;
+			<0 413 IRQ_TYPE_LEVEL_HIGH /* CE0 */ >,
+			<0 414 IRQ_TYPE_LEVEL_HIGH /* CE1 */ >,
+			<0 415 IRQ_TYPE_LEVEL_HIGH /* CE2 */ >,
+			<0 416 IRQ_TYPE_LEVEL_HIGH /* CE3 */ >,
+			<0 417 IRQ_TYPE_LEVEL_HIGH /* CE4 */ >,
+			<0 418 IRQ_TYPE_LEVEL_HIGH /* CE5 */ >,
+			<0 420 IRQ_TYPE_LEVEL_HIGH /* CE6 */ >,
+			<0 421 IRQ_TYPE_LEVEL_HIGH /* CE7 */ >,
+			<0 422 IRQ_TYPE_LEVEL_HIGH /* CE8 */ >,
+			<0 423 IRQ_TYPE_LEVEL_HIGH /* CE9 */ >,
+			<0 424 IRQ_TYPE_LEVEL_HIGH /* CE10 */ >,
+			<0 425 IRQ_TYPE_LEVEL_HIGH /* CE11 */ >;
 		vdd-0.8-cx-mx-supply = <&pm8998_l5>;
 		vdd-1.8-xo-supply = <&pm8998_l7_pin_ctrl>;
 		vdd-1.3-rfa-supply = <&pm8998_l17_pin_ctrl>;
@@ -3089,18 +3089,18 @@
 		clock-names = "cxo_ref_clk_pin";
 		iommus = <&anoc2_smmu 0x1900>,
 			 <&anoc2_smmu 0x1901>;
-		interrupts = <0 413 0 /* CE0 */ >,
-			     <0 414 0 /* CE1 */ >,
-			     <0 415 0 /* CE2 */ >,
-			     <0 416 0 /* CE3 */ >,
-			     <0 417 0 /* CE4 */ >,
-			     <0 418 0 /* CE5 */ >,
-			     <0 420 0 /* CE6 */ >,
-			     <0 421 0 /* CE7 */ >,
-			     <0 422 0 /* CE8 */ >,
-			     <0 423 0 /* CE9 */ >,
-			     <0 424 0 /* CE10 */ >,
-			     <0 425 0 /* CE11 */ >;
+		interrupts = <0 413 IRQ_TYPE_LEVEL_HIGH /* CE0 */ >,
+			     <0 414 IRQ_TYPE_LEVEL_HIGH /* CE1 */ >,
+			     <0 415 IRQ_TYPE_LEVEL_HIGH /* CE2 */ >,
+			     <0 416 IRQ_TYPE_LEVEL_HIGH /* CE3 */ >,
+			     <0 417 IRQ_TYPE_LEVEL_HIGH /* CE4 */ >,
+			     <0 418 IRQ_TYPE_LEVEL_HIGH /* CE5 */ >,
+			     <0 420 IRQ_TYPE_LEVEL_HIGH /* CE6 */ >,
+			     <0 421 IRQ_TYPE_LEVEL_HIGH /* CE7 */ >,
+			     <0 422 IRQ_TYPE_LEVEL_HIGH /* CE8 */ >,
+			     <0 423 IRQ_TYPE_LEVEL_HIGH /* CE9 */ >,
+			     <0 424 IRQ_TYPE_LEVEL_HIGH /* CE10 */ >,
+			     <0 425 IRQ_TYPE_LEVEL_HIGH /* CE11 */ >;
 		qcom,iommu-dma-addr-pool = <0xa0000000 0x10000000>;
 		qcom,iommu-dma = "bypass";
 		qcom,iommu-faults = "stall-disable";
@@ -3135,10 +3135,10 @@
 			"MSM_TSIF1_PHYS",
 			"MSM_TSPP_PHYS",
 			"MSM_TSPP_BAM_PHYS";
-		interrupts = <0 121 0>, /* TSIF_TSPP_IRQ */
-			<0 119 0>, /* TSIF0_IRQ */
-			<0 120 0>, /* TSIF1_IRQ */
-			<0 122 0>; /* TSIF_BAM_IRQ */
+		interrupts = <0 121 IRQ_TYPE_LEVEL_HIGH>, /* TSIF_TSPP_IRQ */
+			<0 119 IRQ_TYPE_LEVEL_HIGH>, /* TSIF0_IRQ */
+			<0 120 IRQ_TYPE_LEVEL_HIGH>, /* TSIF1_IRQ */
+			<0 122 IRQ_TYPE_LEVEL_HIGH>; /* TSIF_BAM_IRQ */
 		interrupt-names = "TSIF_TSPP_IRQ",
 			"TSIF0_IRQ",
 			"TSIF1_IRQ",
@@ -3353,8 +3353,8 @@
 };
 
 &bcl_sensor {
-	interrupts = <0x2 0x42 0x0 IRQ_TYPE_NONE>,
-		     <0x2 0x42 0x2 IRQ_TYPE_NONE>;
+	interrupts = <0x2 0x42 0x0 IRQ_TYPE_EDGE_RISING>,
+		     <0x2 0x42 0x2 IRQ_TYPE_EDGE_RISING>;
 	interrupt-names = "bcl-high-ibat",
 			  "bcl-low-vbat";
 };
