@@ -519,33 +519,36 @@ static int get_bus_node_device_data(
 	return 0;
 }
 
-struct msm_bus_device_node_registration
-	*msm_bus_of_to_pdata(struct platform_device *pdev)
+int msm_bus_of_to_pdata(struct platform_device *pdev,
+			struct msm_bus_device_node_registration **rdata)
 {
 	struct device_node *of_node, *child_node;
 	struct msm_bus_device_node_registration *pdata;
 	unsigned int i = 0, j;
-	unsigned int ret;
+	int ret;
+
+	if (!pdev)
+		return -EINVAL;
 
 	of_node = pdev->dev.of_node;
 
 	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
 	if (!pdata)
-		return NULL;
+		return -ENOMEM;
 
 	pdata->num_devices = of_get_child_count(of_node);
 
 	pdata->info = devm_kcalloc(&pdev->dev, pdata->num_devices,
 				sizeof(*pdata->info), GFP_KERNEL);
 	if (!pdata->info)
-		return NULL;
+		return -ENOMEM;
 
 	ret = 0;
 	for_each_child_of_node(of_node, child_node) {
 		ret = get_bus_node_device_data(child_node, pdev,
 				&pdata->info[i]);
 		if (ret)
-			return NULL;
+			return ret;
 		pdata->info[i].of_node = child_node;
 		i++;
 	}
@@ -578,7 +581,8 @@ struct msm_bus_device_node_registration
 					pdata->info[i].fabdev->bus_type);
 		}
 	}
-	return pdata;
+	*rdata = pdata;
+	return 0;
 }
 
 static int msm_bus_of_get_ids(struct platform_device *pdev,

@@ -1804,16 +1804,18 @@ static int msm_bus_device_probe(struct platform_device *pdev)
 
 	MSM_BUS_ERR("msm_bus: Probe started");
 	/* If possible, get pdata from device-tree */
-	if (pdev->dev.of_node)
-		pdata = msm_bus_of_to_pdata(pdev);
-	else {
+	if (pdev->dev.of_node) {
+		ret = msm_bus_of_to_pdata(pdev, &pdata);
+		if (ret)
+			return ret;
+	} else {
 		pdata = (struct msm_bus_device_node_registration *)
 			pdev->dev.platform_data;
 	}
 
 	MSM_BUS_ERR("msm_bus: DT Parsing complete");
 
-	if (IS_ERR_OR_NULL(pdata)) {
+	if (!pdata) {
 		MSM_BUS_ERR("No platform data found");
 		ret = -ENODATA;
 		goto exit_device_probe;
