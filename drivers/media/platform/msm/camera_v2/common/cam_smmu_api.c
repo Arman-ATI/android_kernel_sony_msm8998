@@ -297,7 +297,8 @@ static void cam_smmu_check_vaddr_in_range(int idx, void *vaddr)
 			vaddr, (void *)start_addr, (void *)end_addr,
 				mapping->ion_fd);
 	}
-	if (!strcmp(iommu_cb_set.cb_info[idx].name, "vfe"))
+	if (iommu_cb_set.cb_info[idx].name &&
+		!strcmp(iommu_cb_set.cb_info[idx].name, "vfe"))
 		pr_err_ratelimited("Cannot find vaddr:%pK in SMMU.\n"
 			" %s uses invalid virtual address\n",
 			vaddr, iommu_cb_set.cb_info[idx].name);
@@ -376,6 +377,7 @@ static int cam_smmu_iommu_fault_handler(struct iommu_domain *domain,
 	char *cb_name;
 	int idx;
 	int j;
+	u32 cb_count;
 	struct cam_smmu_work_payload *payload;
 
 	if (!token) {
@@ -386,13 +388,15 @@ static int cam_smmu_iommu_fault_handler(struct iommu_domain *domain,
 	}
 
 	cb_name = (char *)token;
+	cb_count = min(iommu_cb_set.cb_init_count, iommu_cb_set.cb_num);
 	/* check whether it is in the table */
-	for (idx = 0; idx < iommu_cb_set.cb_num; idx++) {
-		if (!strcmp(iommu_cb_set.cb_info[idx].name, cb_name))
+	for (idx = 0; idx < cb_count; idx++) {
+		if (iommu_cb_set.cb_info[idx].name &&
+			!strcmp(iommu_cb_set.cb_info[idx].name, cb_name))
 			break;
 	}
 
-	if (idx < 0 || idx >= iommu_cb_set.cb_num) {
+	if (idx < 0 || idx >= cb_count) {
 		pr_err("Error: index is not valid, index = %d, token = %s\n",
 			idx, cb_name);
 		return 0;
