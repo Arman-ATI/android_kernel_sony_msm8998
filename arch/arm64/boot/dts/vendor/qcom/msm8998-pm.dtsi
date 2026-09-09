@@ -292,7 +292,7 @@
 		qcom,offset-log-len-mask = <44>;
 		qcom,offset-page-indices = <56>;
 	};
-/*
+
 	qcom,rpm-master-stats@778150 {
 		compatible = "qcom,rpm-master-stats";
 		reg = <0x778150 0x5000>;
@@ -301,6 +301,7 @@
 		qcom,master-offset = <4096>;
 	};
 
+/*
 	rpm_msg_ram: memory@200000 {
 		compatible = "qcom,rpm-msg-ram";
 		reg = <0x200000 0x1000>,
