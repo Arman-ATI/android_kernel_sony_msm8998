@@ -25,26 +25,29 @@ struct qcom_coincell {
 	u32		base_addr;
 };
 
+struct qcom_coincell_match_data {
+	bool legacy_properties;
+};
+
+#define QCOM_COINCELL_REG_TYPE		0x04
+#define QCOM_COINCELL_REG_SUBTYPE	0x05
+
 #define QCOM_COINCELL_REG_RSET		0x44
 #define QCOM_COINCELL_REG_VSET		0x45
 #define QCOM_COINCELL_REG_ENABLE	0x46
 
 #define QCOM_COINCELL_ENABLE		BIT(7)
 
+#define QCOM_COINCELL_TYPE		0x02
+#define QCOM_COINCELL_SUBTYPE		0x20
+
 static const int qcom_rset_map[] = { 2100, 1700, 1200, 800 };
 static const int qcom_vset_map[] = { 2500, 3200, 3100, 3000 };
 /* NOTE: for pm8921 and others, voltage of 2500 is 16 (10000b), not 0 */
 
-/* if enable==0, rset and vset are ignored */
-static int qcom_coincell_chgr_config(struct qcom_coincell *chgr, int rset,
-				     int vset, bool enable)
+static int qcom_coincell_set_rset(struct qcom_coincell *chgr, int rset)
 {
-	int i, j, rc;
-
-	/* if disabling, just do that and skip other operations */
-	if (!enable)
-		return regmap_write(chgr->regmap,
-			  chgr->base_addr + QCOM_COINCELL_REG_ENABLE, 0);
+	int i, rc;
 
 	/* find index for current-limiting resistor */
 	for (i = 0; i < ARRAY_SIZE(qcom_rset_map); i++)
@@ -53,16 +56,6 @@ static int qcom_coincell_chgr_config(struct qcom_coincell *chgr, int rset,
 
 	if (i >= ARRAY_SIZE(qcom_rset_map)) {
 		dev_err(chgr->dev, "invalid rset-ohms value %d\n", rset);
-		return -EINVAL;
-	}
-
-	/* find index for charge voltage */
-	for (j = 0; j < ARRAY_SIZE(qcom_vset_map); j++)
-		if (vset == qcom_vset_map[j])
-			break;
-
-	if (j >= ARRAY_SIZE(qcom_vset_map)) {
-		dev_err(chgr->dev, "invalid vset-millivolts value %d\n", vset);
 		return -EINVAL;
 	}
 
@@ -79,20 +72,106 @@ static int qcom_coincell_chgr_config(struct qcom_coincell *chgr, int rset,
 		return rc;
 	}
 
-	rc = regmap_write(chgr->regmap,
-		chgr->base_addr + QCOM_COINCELL_REG_VSET, j);
+	return 0;
+}
+
+static int qcom_coincell_set_vset(struct qcom_coincell *chgr, int vset)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(qcom_vset_map); i++)
+		if (vset == qcom_vset_map[i])
+			break;
+
+	if (i >= ARRAY_SIZE(qcom_vset_map)) {
+		dev_err(chgr->dev, "invalid vset-millivolts value %d\n", vset);
+		return -EINVAL;
+	}
+
+	return regmap_write(chgr->regmap,
+			    chgr->base_addr + QCOM_COINCELL_REG_VSET, i);
+}
+
+static int qcom_coincell_set_charge(struct qcom_coincell *chgr, bool enable)
+{
+	return regmap_write(chgr->regmap,
+			    chgr->base_addr + QCOM_COINCELL_REG_ENABLE,
+			    enable ? QCOM_COINCELL_ENABLE : 0);
+}
+
+static int qcom_coincell_check_type(struct qcom_coincell *chgr)
+{
+	u8 type[2];
+	int rc;
+
+	rc = regmap_bulk_read(chgr->regmap,
+			      chgr->base_addr + QCOM_COINCELL_REG_TYPE, type,
+			      ARRAY_SIZE(type));
 	if (rc)
 		return rc;
 
-	/* set 'enable' register */
-	return regmap_write(chgr->regmap,
-			    chgr->base_addr + QCOM_COINCELL_REG_ENABLE,
-			    QCOM_COINCELL_ENABLE);
+	if (type[0] != QCOM_COINCELL_TYPE ||
+	    type[1] != QCOM_COINCELL_SUBTYPE) {
+		dev_err(chgr->dev, "invalid type 0x%02x or subtype 0x%02x\n",
+			type[0], type[1]);
+		return -ENODEV;
+	}
+
+	return 0;
+}
+
+static int qcom_coincell_legacy_config(struct qcom_coincell *chgr,
+				       struct device_node *node)
+{
+	u32 value;
+	int rc;
+
+	rc = qcom_coincell_check_type(chgr);
+	if (rc)
+		return rc;
+
+	if (!of_property_read_u32(node, "qcom,rset-ohms", &value)) {
+		rc = qcom_coincell_set_rset(chgr, value);
+		if (rc)
+			return rc;
+	}
+
+	if (!of_property_read_u32(node, "qcom,vset-millivolts", &value)) {
+		rc = qcom_coincell_set_vset(chgr, value);
+		if (rc)
+			return rc;
+	}
+
+	if (!of_property_read_u32(node, "qcom,charge-enable", &value))
+		return qcom_coincell_set_charge(chgr, value);
+
+	return 0;
+}
+
+static int qcom_coincell_chgr_config(struct qcom_coincell *chgr, int rset,
+				     int vset, bool enable)
+{
+	int rc;
+
+	/* if disabling, just do that and skip other operations */
+	if (!enable)
+		return qcom_coincell_set_charge(chgr, false);
+
+	rc = qcom_coincell_set_rset(chgr, rset);
+	if (rc)
+		return rc;
+
+	rc = qcom_coincell_set_vset(chgr, vset);
+	if (rc)
+		return rc;
+
+	return qcom_coincell_set_charge(chgr, true);
 }
 
 static int qcom_coincell_probe(struct platform_device *pdev)
 {
 	struct device_node *node = pdev->dev.of_node;
+	const struct qcom_coincell_match_data *match_data;
 	struct qcom_coincell chgr;
 	u32 rset = 0;
 	u32 vset = 0;
@@ -110,6 +189,10 @@ static int qcom_coincell_probe(struct platform_device *pdev)
 	rc = of_property_read_u32(node, "reg", &chgr.base_addr);
 	if (rc)
 		return rc;
+
+	match_data = of_device_get_match_data(&pdev->dev);
+	if (match_data && match_data->legacy_properties)
+		return qcom_coincell_legacy_config(&chgr, node);
 
 	enable = !of_property_read_bool(node, "qcom,charger-disable");
 
@@ -132,8 +215,16 @@ static int qcom_coincell_probe(struct platform_device *pdev)
 	return qcom_coincell_chgr_config(&chgr, rset, vset, enable);
 }
 
+static const struct qcom_coincell_match_data qcom_coincell_legacy_data = {
+	.legacy_properties = true,
+};
+
 static const struct of_device_id qcom_coincell_match_table[] = {
 	{ .compatible = "qcom,pm8941-coincell", },
+	{
+		.compatible = "qcom,qpnp-coincell",
+		.data = &qcom_coincell_legacy_data,
+	},
 	{}
 };
 
