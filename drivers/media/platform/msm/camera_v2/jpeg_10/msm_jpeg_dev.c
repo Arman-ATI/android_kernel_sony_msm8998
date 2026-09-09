@@ -162,11 +162,12 @@ static int msm_jpeg_init_dev(struct platform_device *pdev)
 	struct msm_jpeg_device *msm_jpeg_device_p;
 	const struct of_device_id *device_id;
 	const struct msm_jpeg_priv_data *priv_data;
+	u32 cell_index;
 
 	msm_jpeg_device_p = kzalloc(sizeof(struct msm_jpeg_device), GFP_ATOMIC);
 	if (!msm_jpeg_device_p) {
 		JPEG_PR_ERR("%s: no mem\n", __func__);
-		return -EFAULT;
+		return -ENOMEM;
 	}
 
 	msm_jpeg_device_p->pdev = pdev;
@@ -180,14 +181,26 @@ static int msm_jpeg_init_dev(struct platform_device *pdev)
 	priv_data = device_id->data;
 	msm_jpeg_device_p->core_type = priv_data->core_type;
 
-	if (pdev->dev.of_node)
-		of_property_read_u32((&pdev->dev)->of_node, "cell-index",
-			&pdev->id);
+	if (!pdev->dev.of_node) {
+		rc = -EINVAL;
+		goto fail;
+	}
+
+	rc = of_property_read_u32(pdev->dev.of_node, "cell-index",
+		&cell_index);
+	if (rc < 0)
+		goto fail;
+
+	if (cell_index >= JPEG_DEV_CNT) {
+		rc = -EINVAL;
+		goto fail;
+	}
+	pdev->id = cell_index;
 
 	snprintf(devname, sizeof(devname), "%s%d", MSM_JPEG_NAME, pdev->id);
 
 	rc = __msm_jpeg_init(msm_jpeg_device_p);
-	if (rc < -1) {
+	if (rc < 0) {
 		JPEG_PR_ERR("%s: initialization failed\n", __func__);
 		goto fail;
 	}

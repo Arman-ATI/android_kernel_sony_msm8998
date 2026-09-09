@@ -28,7 +28,6 @@
 #include "cam_hw_ops.h"
 
 #define JPEG_REG_SIZE 0x308
-#define JPEG_DEV_CNT 4
 #define JPEG_DEC_ID 2
 #define UINT32_MAX (0xFFFFFFFFU)
 #define MAX_WAIT_TIMEOUT UINT_MAX
@@ -1615,7 +1614,7 @@ int __msm_jpeg_init(struct msm_jpeg_device *pgmn_dev)
 err_setup:
 err_smmu:
 	mutex_destroy(&pgmn_dev->lock);
-	return -EFAULT;
+	return rc;
 }
 
 int __msm_jpeg_exit(struct msm_jpeg_device *pgmn_dev)

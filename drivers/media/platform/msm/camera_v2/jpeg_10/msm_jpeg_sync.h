@@ -32,6 +32,7 @@
 #define JPEG_8994 0x10020000
 #define JPEG_CLK_MAX 16
 #define JPEG_REGULATOR_MAX 3
+#define JPEG_DEV_CNT 4
 
 enum msm_jpeg_state {
 	MSM_JPEG_INIT,
