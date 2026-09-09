@@ -94,6 +94,8 @@ struct devfreq_dev_status {
  * @freq_table:		Optional list of frequencies to support statistics
  *			and freq_table must be generated in ascending order.
  * @max_state:		The size of freq_table.
+ * @continuous_freq:	The target accepts a continuous range of values and
+ *			does not use an OPP or frequency table.
  */
 struct devfreq_dev_profile {
 	unsigned long initial_freq;
@@ -107,6 +109,7 @@ struct devfreq_dev_profile {
 
 	unsigned long *freq_table;
 	unsigned int max_state;
+	bool continuous_freq;
 };
 
 /**

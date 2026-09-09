@@ -355,6 +355,7 @@ static int probe(struct platform_device *pdev)
 	data->profile->get_dev_status = get_dev_status;
 	data->profile->get_cur_freq = get_cur_bw;
 	data->profile->polling_ms = data->window;
+	data->profile->continuous_freq = true;
 
 	data->devfreq =
 	    devfreq_add_device(&pdev->dev, data->profile, "spdm_bw_hyp", data);

@@ -318,23 +318,34 @@ int update_devfreq(struct devfreq *devfreq)
 	if (err)
 		return err;
 
-	/*
-	 * Adjust the frequency with user freq, QoS and available freq.
-	 *
-	 * List from the highest priority
-	 * max_freq
-	 * min_freq
-	 */
-	max_freq = MIN(devfreq->scaling_max_freq, devfreq->max_freq);
-	min_freq = MAX(devfreq->scaling_min_freq, devfreq->min_freq);
+	if (devfreq->profile->continuous_freq) {
+		if (devfreq->min_freq && freq < devfreq->min_freq) {
+			freq = devfreq->min_freq;
+			flags &= ~DEVFREQ_FLAG_LEAST_UPPER_BOUND;
+		}
+		if (devfreq->max_freq && freq > devfreq->max_freq) {
+			freq = devfreq->max_freq;
+			flags |= DEVFREQ_FLAG_LEAST_UPPER_BOUND;
+		}
+	} else {
+		/*
+		 * Adjust the frequency with user freq, QoS and available freq.
+		 *
+		 * List from the highest priority
+		 * max_freq
+		 * min_freq
+		 */
+		max_freq = MIN(devfreq->scaling_max_freq, devfreq->max_freq);
+		min_freq = MAX(devfreq->scaling_min_freq, devfreq->min_freq);
 
-	if (freq < min_freq) {
-		freq = min_freq;
-		flags &= ~DEVFREQ_FLAG_LEAST_UPPER_BOUND; /* Use GLB */
-	}
-	if (freq > max_freq) {
-		freq = max_freq;
-		flags |= DEVFREQ_FLAG_LEAST_UPPER_BOUND; /* Use LUB */
+		if (freq < min_freq) {
+			freq = min_freq;
+			flags &= ~DEVFREQ_FLAG_LEAST_UPPER_BOUND; /* Use GLB */
+		}
+		if (freq > max_freq) {
+			freq = max_freq;
+			flags |= DEVFREQ_FLAG_LEAST_UPPER_BOUND; /* Use LUB */
+		}
 	}
 
 	if (devfreq->profile->get_cur_freq)
@@ -356,7 +367,8 @@ int update_devfreq(struct devfreq *devfreq)
 	freqs.new = freq;
 	devfreq_notify_transition(devfreq, &freqs, DEVFREQ_POSTCHANGE);
 
-	if (devfreq_update_status(devfreq, freq))
+	if (!devfreq->profile->continuous_freq &&
+	    devfreq_update_status(devfreq, freq))
 		dev_err(&devfreq->dev,
 			"Couldn't update frequency transition information.\n");
 
@@ -438,7 +450,8 @@ void devfreq_monitor_suspend(struct devfreq *devfreq)
 		return;
 	}
 
-	devfreq_update_status(devfreq, devfreq->previous_freq);
+	if (!devfreq->profile->continuous_freq)
+		devfreq_update_status(devfreq, devfreq->previous_freq);
 	devfreq->stop_polling = true;
 	mutex_unlock(&devfreq->lock);
 	cancel_delayed_work_sync(&devfreq->work);
@@ -639,7 +652,8 @@ struct devfreq *devfreq_add_device(struct device *dev,
 	devfreq->nb.notifier_call = devfreq_notifier_call;
 	devfreq->dev_suspended = false;
 
-	if (!devfreq->profile->max_state && !devfreq->profile->freq_table) {
+	if (!devfreq->profile->continuous_freq &&
+	    !devfreq->profile->max_state && !devfreq->profile->freq_table) {
 		mutex_unlock(&devfreq->lock);
 		err = set_freq_table(devfreq);
 		if (err < 0)
@@ -647,21 +661,23 @@ struct devfreq *devfreq_add_device(struct device *dev,
 		mutex_lock(&devfreq->lock);
 	}
 
-	freq = find_available_min_freq(devfreq);
-	if (freq < 0) {
-		mutex_unlock(&devfreq->lock);
-		err = -EINVAL;
-		goto err_dev;
-	}
-	devfreq->min_freq = devfreq->scaling_min_freq = freq;
+	if (!devfreq->profile->continuous_freq) {
+		freq = find_available_min_freq(devfreq);
+		if (freq < 0) {
+			mutex_unlock(&devfreq->lock);
+			err = -EINVAL;
+			goto err_dev;
+		}
+		devfreq->min_freq = devfreq->scaling_min_freq = freq;
 
-	freq = find_available_max_freq(devfreq);
-	if (freq < 0) {
-		mutex_unlock(&devfreq->lock);
-		err = -EINVAL;
-		goto err_dev;
+		freq = find_available_max_freq(devfreq);
+		if (freq < 0) {
+			mutex_unlock(&devfreq->lock);
+			err = -EINVAL;
+			goto err_dev;
+		}
+		devfreq->max_freq = devfreq->scaling_max_freq = freq;
 	}
-	devfreq->max_freq = devfreq->scaling_max_freq = freq;
 
 	dev_set_name(&devfreq->dev, "%s", dev_name(dev));
 	err = device_register(&devfreq->dev);
@@ -671,16 +687,18 @@ struct devfreq *devfreq_add_device(struct device *dev,
 		goto err_out;
 	}
 
-	devfreq->trans_table =
-		devm_kzalloc(&devfreq->dev,
-			     array3_size(sizeof(unsigned int),
-					 devfreq->profile->max_state,
-					 devfreq->profile->max_state),
-			     GFP_KERNEL);
-	devfreq->time_in_state = devm_kcalloc(&devfreq->dev,
-						devfreq->profile->max_state,
-						sizeof(unsigned long),
-						GFP_KERNEL);
+	if (!devfreq->profile->continuous_freq) {
+		devfreq->trans_table =
+			devm_kzalloc(&devfreq->dev,
+				     array3_size(sizeof(unsigned int),
+						 devfreq->profile->max_state,
+						 devfreq->profile->max_state),
+				     GFP_KERNEL);
+		devfreq->time_in_state = devm_kcalloc(&devfreq->dev,
+							devfreq->profile->max_state,
+							sizeof(unsigned long),
+							GFP_KERNEL);
+	}
 	devfreq->last_stat_updated = jiffies;
 
 	srcu_init_notifier_head(&devfreq->transition_notifier_list);
@@ -1224,7 +1242,12 @@ static ssize_t min_freq_store(struct device *dev, struct device_attribute *attr,
 	mutex_lock(&df->event_lock);
 	mutex_lock(&df->lock);
 
-	if (value) {
+	if (df->profile->continuous_freq) {
+		if (value && df->max_freq && value > df->max_freq) {
+			ret = -EINVAL;
+			goto unlock;
+		}
+	} else if (value) {
 		if (value > df->max_freq) {
 			ret = -EINVAL;
 			goto unlock;
@@ -1270,7 +1293,12 @@ static ssize_t max_freq_store(struct device *dev, struct device_attribute *attr,
 	mutex_lock(&df->event_lock);
 	mutex_lock(&df->lock);
 
-	if (value) {
+	if (df->profile->continuous_freq) {
+		if (value && df->min_freq && value < df->min_freq) {
+			ret = -EINVAL;
+			goto unlock;
+		}
+	} else if (value) {
 		if (value < df->min_freq) {
 			ret = -EINVAL;
 			goto unlock;
@@ -1299,6 +1327,9 @@ static ssize_t max_freq_show(struct device *dev, struct device_attribute *attr,
 			     char *buf)
 {
 	struct devfreq *df = to_devfreq(dev);
+
+	if (df->profile->continuous_freq)
+		return sprintf(buf, "%lu\n", df->max_freq);
 
 	return sprintf(buf, "%lu\n", MIN(df->scaling_max_freq, df->max_freq));
 }
