@@ -515,7 +515,7 @@ static int a5xx_preemption_ringbuffer_init(struct adreno_device *adreno_dev,
 	kgsl_sharedmem_writel(device, &rb->preemption_desc,
 		PREEMPT_RECORD(data), 0);
 	kgsl_sharedmem_writel(device, &rb->preemption_desc,
-		PREEMPT_RECORD(cntl), A5XX_CP_RB_CNTL_DEFAULT);
+		PREEMPT_RECORD(cntl), a5xx_cp_rb_cntl(adreno_dev));
 	kgsl_sharedmem_writel(device, &rb->preemption_desc,
 		PREEMPT_RECORD(rptr), 0);
 	kgsl_sharedmem_writel(device, &rb->preemption_desc,

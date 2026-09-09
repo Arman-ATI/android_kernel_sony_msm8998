@@ -2016,7 +2016,7 @@ static int a5xx_rb_start(struct adreno_device *adreno_dev)
 	 */
 
 	adreno_writereg(adreno_dev, ADRENO_REG_CP_RB_CNTL,
-		A5XX_CP_RB_CNTL_DEFAULT);
+		a5xx_cp_rb_cntl(adreno_dev));
 
 	adreno_writereg64(adreno_dev, ADRENO_REG_CP_RB_BASE,
 			ADRENO_REG_CP_RB_BASE_HI, rb->buffer_desc.gpuaddr);
