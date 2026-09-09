@@ -11,6 +11,7 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
 #include <linux/regulator/consumer.h>
@@ -94,6 +95,32 @@ enum qusb_phy_reg {
 	USB2_PHY_REG_MAX,
 };
 
+struct qusb_phy_cfg {
+	const unsigned int	*phy_reg;
+	unsigned int		tune_count;
+	bool			pll_status_common;
+	bool			has_debug_regs;
+	bool			has_dp_pulse;
+};
+
+static const unsigned int msm8998_phy_reg[USB2_PHY_REG_MAX] = {
+	[PORT_TUNE1]			= 0x23c,
+	[PLL_COMMON_STATUS_ONE]		= 0x1a0,
+	[PWR_CTRL1]			= 0x210,
+	[INTR_CTRL]			= 0x22c,
+	[PLL_CORE_INPUT_OVERRIDE]	= 0x0a8,
+	[TEST1]				= 0x24c,
+	[BIAS_CTRL_2]			= 0x198,
+};
+
+static const struct qusb_phy_cfg msm8998_phy_cfg = {
+	.phy_reg		= msm8998_phy_reg,
+	.tune_count		= 4,
+	.pll_status_common	= true,
+	.has_debug_regs		= false,
+	.has_dp_pulse		= false,
+};
+
 struct qusb_phy {
 	struct usb_phy		phy;
 	struct mutex		lock;
@@ -119,6 +146,10 @@ struct qusb_phy {
 
 	unsigned int		*phy_reg;
 	int			qusb_phy_reg_offset_cnt;
+	unsigned int		tune_count;
+	bool			pll_status_common;
+	bool			has_debug_regs;
+	bool			has_dp_pulse;
 
 	u32			tune_val;
 	int			efuse_bit_pos;
@@ -499,6 +530,12 @@ static bool qusb_phy_pll_locked(struct qusb_phy *qphy)
 {
 	u32 val;
 
+	if (qphy->pll_status_common) {
+		val = readl_relaxed(qphy->base +
+				qphy->phy_reg[PLL_COMMON_STATUS_ONE]);
+		return val & CORE_READY_STATUS;
+	}
+
 	writel_relaxed(DEBUG_CTRL2_MUX_PLL_LOCK_STATUS,
 		       qphy->base + qphy->phy_reg[DEBUG_CTRL2]);
 
@@ -534,11 +571,12 @@ static void qusb_phy_host_init(struct usb_phy *phy)
 	pr_debug("%s(): Programming TUNE1 parameter as:%x\n",
 		__func__, readb_relaxed(qphy->base +
 					qphy->phy_reg[PORT_TUNE1]));
-	writel_relaxed(DEBUG_CTRL1_OVERRIDE_VAL,
-		qphy->base + qphy->phy_reg[DEBUG_CTRL1]);
+	if (qphy->has_debug_regs)
+		writel_relaxed(DEBUG_CTRL1_OVERRIDE_VAL,
+			qphy->base + qphy->phy_reg[DEBUG_CTRL1]);
 
 	/* if debugfs based tunex params are set, use that value. */
-	for (p_index = 0; p_index < 5; p_index++) {
+	for (p_index = 0; p_index < qphy->tune_count; p_index++) {
 		if (qphy->tune[p_index])
 			writel_relaxed(qphy->tune[p_index],
 				qphy->base + qphy->phy_reg[PORT_TUNE1] +
@@ -629,7 +667,7 @@ static int qusb_phy_init(struct usb_phy *phy)
 	}
 
 	/* if debugfs based tunex params are set, use that value. */
-	for (p_index = 0; p_index < 5; p_index++) {
+	for (p_index = 0; p_index < qphy->tune_count; p_index++) {
 		if (qphy->tune[p_index])
 			writel_relaxed(qphy->tune[p_index],
 				qphy->base + qphy->phy_reg[PORT_TUNE1] +
@@ -837,6 +875,9 @@ static int msm_qusb_phy_drive_dp_pulse(struct usb_phy *phy,
 	struct qusb_phy *qphy = container_of(phy, struct qusb_phy, phy);
 	int ret;
 
+	if (!qphy->has_dp_pulse || !qphy->has_debug_regs)
+		return -EOPNOTSUPP;
+
 	ret = qusb_phy_enable_power(qphy);
 	if (ret < 0) {
 		dev_dbg(qphy->phy.dev,
@@ -990,7 +1031,7 @@ static int qusb_phy_create_debugfs(struct qusb_phy *qphy)
 		goto create_err;
 	}
 
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < qphy->tune_count; i++) {
 		snprintf(name, sizeof(name), "tune%d", (i + 1));
 		file = debugfs_create_x8(name, 0644, qphy->root,
 						&qphy->tune[i]);
@@ -1051,6 +1092,7 @@ static int qusb2_get_regulators(struct qusb_phy *qphy)
 static int qusb_phy_probe(struct platform_device *pdev)
 {
 	struct qusb_phy *qphy;
+	const struct qusb_phy_cfg *cfg;
 	struct device *dev = &pdev->dev;
 	struct resource *res;
 	int ret = 0, size = 0;
@@ -1060,6 +1102,10 @@ static int qusb_phy_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	qphy->phy.dev = dev;
+	qphy->tune_count = ARRAY_SIZE(qphy->tune);
+	qphy->has_debug_regs = true;
+	qphy->has_dp_pulse = true;
+	cfg = of_device_get_match_data(dev);
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 							"qusb_phy_base");
 	qphy->base = devm_ioremap_resource(dev, res);
@@ -1225,29 +1271,43 @@ static int qusb_phy_probe(struct platform_device *pdev)
 		}
 	}
 
-	size = 0;
-	of_get_property(dev->of_node, "qcom,qusb-phy-reg-offset", &size);
-	if (size) {
-		qphy->phy_reg = devm_kzalloc(dev, size, GFP_KERNEL);
-		if (qphy->phy_reg) {
-			qphy->qusb_phy_reg_offset_cnt =
-				size / sizeof(*qphy->phy_reg);
-			if (qphy->qusb_phy_reg_offset_cnt != USB2_PHY_REG_MAX) {
-				dev_err(dev, "invalid reg offset count\n");
-				return -EINVAL;
-			}
+	if (cfg) {
+		qphy->phy_reg = devm_kmemdup(dev, cfg->phy_reg,
+					sizeof(msm8998_phy_reg), GFP_KERNEL);
+		if (!qphy->phy_reg)
+			return -ENOMEM;
 
-			of_property_read_u32_array(dev->of_node,
-					"qcom,qusb-phy-reg-offset",
-					qphy->phy_reg,
-					qphy->qusb_phy_reg_offset_cnt);
-		} else {
+		qphy->qusb_phy_reg_offset_cnt = USB2_PHY_REG_MAX;
+		qphy->tune_count = cfg->tune_count;
+		qphy->pll_status_common = cfg->pll_status_common;
+		qphy->has_debug_regs = cfg->has_debug_regs;
+		qphy->has_dp_pulse = cfg->has_dp_pulse;
+	} else {
+		size = 0;
+		of_get_property(dev->of_node, "qcom,qusb-phy-reg-offset",
+				&size);
+		if (!size) {
+			dev_err(dev,
+				"err provide qcom,qusb-phy-reg-offset\n");
+			return -EINVAL;
+		}
+
+		qphy->phy_reg = devm_kzalloc(dev, size, GFP_KERNEL);
+		if (!qphy->phy_reg) {
 			dev_err(dev, "err mem alloc for qusb_phy_reg_offset\n");
 			return -ENOMEM;
 		}
-	} else {
-		dev_err(dev, "err provide qcom,qmp-phy-reg-offset\n");
-		return -EINVAL;
+
+		qphy->qusb_phy_reg_offset_cnt =
+			size / sizeof(*qphy->phy_reg);
+		if (qphy->qusb_phy_reg_offset_cnt != USB2_PHY_REG_MAX) {
+			dev_err(dev, "invalid reg offset count\n");
+			return -EINVAL;
+		}
+
+		of_property_read_u32_array(dev->of_node,
+				"qcom,qusb-phy-reg-offset", qphy->phy_reg,
+				qphy->qusb_phy_reg_offset_cnt);
 	}
 
 	size = 0;
@@ -1315,7 +1375,8 @@ static int qusb_phy_probe(struct platform_device *pdev)
 	qphy->phy.type			= USB_PHY_TYPE_USB2;
 	qphy->phy.notify_connect        = qusb_phy_notify_connect;
 	qphy->phy.notify_disconnect     = qusb_phy_notify_disconnect;
-	qphy->phy.drive_dp_pulse	= msm_qusb_phy_drive_dp_pulse;
+	if (qphy->has_dp_pulse)
+		qphy->phy.drive_dp_pulse = msm_qusb_phy_drive_dp_pulse;
 
 	ret = usb_add_phy_dev(&qphy->phy);
 	if (ret)
@@ -1352,6 +1413,8 @@ static int qusb_phy_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id qusb_phy_id_table[] = {
+	{ .compatible = "qcom,msm8998-qusb2phy-v2",
+	  .data = &msm8998_phy_cfg, },
 	{ .compatible = "qcom,qusb2phy-v2", },
 	{ },
 };

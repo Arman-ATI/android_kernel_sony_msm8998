@@ -155,7 +155,8 @@ Example:
 QUSB2 High-Speed PHY
 
 Required properties:
- - compatible: Should be "qcom,qusb2phy" or "qcom,qusb2phy-v2"
+ - compatible: Should be "qcom,qusb2phy", "qcom,qusb2phy-v2", or
+   "qcom,msm8998-qusb2phy-v2" followed by "qcom,qusb2phy-v2" as a fallback.
  - reg: Address and length of the QUSB2 PHY register set
  - reg-names: Should be "qusb_phy_base".
  - <supply-name>-supply: phandle to the regulator device tree node
@@ -175,7 +176,10 @@ Required properties:
    and reset lines used by this controller.
  - reset-names: reset signal name strings sorted in the same order as the resets
    property.
- - qcom,qusb-phy-reg-offset: Provides important phy register offsets in an order defined in phy driver.
+ - qcom,qusb-phy-reg-offset: Provides important phy register offsets in an
+   order defined in phy driver. The generic "qcom,qusb2phy-v2" compatible
+   requires exactly 12 offsets. The "qcom,msm8998-qusb2phy-v2" compatible
+   supplies its register layout internally and does not use this property.
 
 Optional properties:
  - reg-names: Additional registers corresponding with the following:
