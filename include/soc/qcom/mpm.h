@@ -20,6 +20,7 @@ extern const struct mpm_pin mpm_sdm630_gic_chip_data[];
 extern const struct mpm_pin mpm_sdm660_gic_chip_data[];
 extern const struct mpm_pin mpm_msm8937_gic_chip_data[];
 extern const struct mpm_pin mpm_msm8953_gic_chip_data[];
+extern const struct mpm_pin mpm_msm8998_gic_chip_data[];
 extern const struct mpm_pin mpm_khaje_gic_chip_data[];
 
 #endif /* __QCOM_MPM_H__ */
