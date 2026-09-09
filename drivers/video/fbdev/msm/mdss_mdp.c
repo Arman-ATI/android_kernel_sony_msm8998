@@ -2866,7 +2866,7 @@ static ssize_t bw_mode_bitmap_show(struct device *dev,
 		pipe_bw_settings++;
 	}
 
-	return 0;
+	return cnt;
 }
 
 static ssize_t bw_mode_bitmap_store(struct device *dev,
