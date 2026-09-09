@@ -566,9 +566,9 @@ static int battery_supply_callback(struct notifier_block *nb,
 	return NOTIFY_OK;
 }
 
-static void bcl_fetch_trip(struct platform_device *pdev, const char *int_name,
-		struct bcl_peripheral_data *data,
-		irqreturn_t (*handle)(int, void *))
+static int bcl_fetch_trip(struct platform_device *pdev, const char *int_name,
+			  struct bcl_peripheral_data *data,
+			  irqreturn_t (*handle)(int, void *))
 {
 	int ret = 0, irq_num = 0;
 
@@ -583,28 +583,31 @@ static void bcl_fetch_trip(struct platform_device *pdev, const char *int_name,
 		data->irq_num = 0;
 		data->irq_enabled = false;
 		mutex_unlock(&data->state_trans_lock);
-		return;
+		return 0;
 	}
 
 	irq_num = platform_get_irq_byname(pdev, int_name);
-	if (irq_num) {
-		mutex_lock(&data->state_trans_lock);
-		ret = devm_request_threaded_irq(&pdev->dev,
-				irq_num, NULL, handle,
-				IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-				int_name, data);
-		if (ret) {
-			dev_err(&pdev->dev,
-				"Error requesting trip irq. err:%d\n",
-				ret);
-			mutex_unlock(&data->state_trans_lock);
-			return;
-		}
-		disable_irq_nosync(irq_num);
-		data->irq_num = irq_num;
-		data->irq_enabled = false;
-		mutex_unlock(&data->state_trans_lock);
+	if (irq_num < 0) {
+		dev_err(&pdev->dev, "Invalid %s IRQ\n", int_name);
+		return -ENXIO;
 	}
+
+	mutex_lock(&data->state_trans_lock);
+	ret = devm_request_threaded_irq(&pdev->dev, irq_num, NULL, handle,
+					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					int_name, data);
+	if (ret) {
+		dev_err(&pdev->dev, "Error requesting trip irq. err:%d\n",
+			ret);
+		mutex_unlock(&data->state_trans_lock);
+		return ret;
+	}
+	disable_irq_nosync(irq_num);
+	data->irq_num = irq_num;
+	data->irq_enabled = false;
+	mutex_unlock(&data->state_trans_lock);
+
+	return 0;
 }
 
 static void bcl_probe_soc(struct platform_device *pdev)
@@ -634,23 +637,30 @@ static void bcl_probe_soc(struct platform_device *pdev)
 	schedule_work(&bcl_perph->soc_eval_work);
 }
 
-static void bcl_vbat_init(struct platform_device *pdev,
-		struct bcl_peripheral_data *vbat, enum bcl_dev_type type)
+static int bcl_vbat_init(struct platform_device *pdev,
+			 struct bcl_peripheral_data *vbat,
+			 enum bcl_dev_type type)
 {
+	int ret;
+
 	mutex_init(&vbat->state_trans_lock);
 	switch (type) {
 	case BCL_LOW_VBAT:
-		bcl_fetch_trip(pdev, BCL_VBAT_INT, vbat, bcl_handle_vbat);
+		ret = bcl_fetch_trip(pdev, BCL_VBAT_INT, vbat,
+				     bcl_handle_vbat);
 		break;
 	case BCL_VLOW_VBAT:
-		bcl_fetch_trip(pdev, BCL_VLOW_VBAT_INT, vbat, NULL);
+		ret = bcl_fetch_trip(pdev, BCL_VLOW_VBAT_INT, vbat, NULL);
 		break;
 	case BCL_CLOW_VBAT:
-		bcl_fetch_trip(pdev, BCL_CLOW_VBAT_INT, vbat, NULL);
+		ret = bcl_fetch_trip(pdev, BCL_CLOW_VBAT_INT, vbat, NULL);
 		break;
 	default:
-		return;
+		return -EINVAL;
 	}
+	if (ret)
+		return ret;
+
 	vbat->ops.get_temp = bcl_read_vbat_and_clear;
 	vbat->ops.set_trips = bcl_set_vbat;
 	vbat->tz_dev = thermal_zone_of_sensor_register(&pdev->dev,
@@ -658,26 +668,46 @@ static void bcl_vbat_init(struct platform_device *pdev,
 	if (IS_ERR(vbat->tz_dev)) {
 		pr_err("vbat register failed. err:%ld\n",
 				PTR_ERR(vbat->tz_dev));
-		return;
+		return 0;
 	}
 	thermal_zone_device_update(vbat->tz_dev, THERMAL_DEVICE_UP);
+
+	return 0;
 }
 
-static void bcl_probe_vbat(struct platform_device *pdev)
+static int bcl_probe_vbat(struct platform_device *pdev)
 {
-	bcl_vbat_init(pdev, &bcl_perph->param[BCL_LOW_VBAT], BCL_LOW_VBAT);
-	bcl_vbat_init(pdev, &bcl_perph->param[BCL_VLOW_VBAT], BCL_VLOW_VBAT);
-	bcl_vbat_init(pdev, &bcl_perph->param[BCL_CLOW_VBAT], BCL_CLOW_VBAT);
+	int ret;
+
+	ret = bcl_vbat_init(pdev, &bcl_perph->param[BCL_LOW_VBAT],
+			    BCL_LOW_VBAT);
+	if (ret)
+		return ret;
+
+	ret = bcl_vbat_init(pdev, &bcl_perph->param[BCL_VLOW_VBAT],
+			    BCL_VLOW_VBAT);
+	if (ret)
+		return ret;
+
+	return bcl_vbat_init(pdev, &bcl_perph->param[BCL_CLOW_VBAT],
+			     BCL_CLOW_VBAT);
 }
 
-static void bcl_ibat_init(struct platform_device *pdev,
-		struct bcl_peripheral_data *ibat, enum bcl_dev_type type)
+static int bcl_ibat_init(struct platform_device *pdev,
+			 struct bcl_peripheral_data *ibat,
+			 enum bcl_dev_type type)
 {
+	int ret;
+
 	mutex_init(&ibat->state_trans_lock);
 	if (type == BCL_HIGH_IBAT)
-		bcl_fetch_trip(pdev, BCL_IBAT_INT, ibat, bcl_handle_ibat);
+		ret = bcl_fetch_trip(pdev, BCL_IBAT_INT, ibat,
+				     bcl_handle_ibat);
 	else
-		bcl_fetch_trip(pdev, BCL_VHIGH_IBAT_INT, ibat, NULL);
+		ret = bcl_fetch_trip(pdev, BCL_VHIGH_IBAT_INT, ibat, NULL);
+	if (ret)
+		return ret;
+
 	ibat->ops.get_temp = bcl_read_ibat_and_clear;
 	ibat->ops.set_trips = bcl_set_ibat;
 	ibat->tz_dev = thermal_zone_of_sensor_register(&pdev->dev,
@@ -685,15 +715,24 @@ static void bcl_ibat_init(struct platform_device *pdev,
 	if (IS_ERR(ibat->tz_dev)) {
 		pr_err("ibat register failed. err:%ld\n",
 				PTR_ERR(ibat->tz_dev));
-		return;
+		return 0;
 	}
 	thermal_zone_device_update(ibat->tz_dev, THERMAL_DEVICE_UP);
+
+	return 0;
 }
 
-static void bcl_probe_ibat(struct platform_device *pdev)
+static int bcl_probe_ibat(struct platform_device *pdev)
 {
-	bcl_ibat_init(pdev, &bcl_perph->param[BCL_HIGH_IBAT], BCL_HIGH_IBAT);
-	bcl_ibat_init(pdev, &bcl_perph->param[BCL_VHIGH_IBAT], BCL_VHIGH_IBAT);
+	int ret;
+
+	ret = bcl_ibat_init(pdev, &bcl_perph->param[BCL_HIGH_IBAT],
+			    BCL_HIGH_IBAT);
+	if (ret)
+		return ret;
+
+	return bcl_ibat_init(pdev, &bcl_perph->param[BCL_VHIGH_IBAT],
+			     BCL_VHIGH_IBAT);
 }
 
 static void bcl_configure_lmh_peripheral(void)
@@ -739,23 +778,37 @@ static int bcl_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	bcl_get_devicetree_data(pdev);
-	bcl_probe_ibat(pdev);
-	bcl_probe_vbat(pdev);
-	bcl_probe_soc(pdev);
+	ret = bcl_get_devicetree_data(pdev);
+	if (ret)
+		goto bcl_probe_exit;
+
 	bcl_configure_lmh_peripheral();
+
+	ret = bcl_probe_ibat(pdev);
+	if (ret)
+		goto bcl_probe_remove;
+
+	ret = bcl_probe_vbat(pdev);
+	if (ret)
+		goto bcl_probe_remove;
+
+	bcl_probe_soc(pdev);
 
 	dev_set_drvdata(&pdev->dev, bcl_perph);
 	ret = bcl_write_register(BCL_MONITOR_EN, BIT(7));
 	if (ret) {
 		pr_err("Error accessing BCL peripheral. err:%d\n", ret);
-		goto bcl_probe_exit;
+		goto bcl_probe_remove;
 	}
 
 	return 0;
 
-bcl_probe_exit:
+bcl_probe_remove:
 	bcl_remove(pdev);
+	return ret;
+
+bcl_probe_exit:
+	bcl_perph = NULL;
 	return ret;
 }
 
