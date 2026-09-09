@@ -1997,7 +1997,8 @@
 			<&clock_rpmcc CXO_SMD_DWC3_CLK>;
 
 		clock-names = "core_clk", "iface_clk", "bus_aggr_clk",
-				"noc_aggr_clk", "utmi_clk", "sleep_clk", "xo";
+				"noc_aggr_clk", "utmi_clk", "sleep_clk",
+				"cfg_ahb_clk", "xo";
 
 		qcom,core-clk-rate = <120000000>;
 		qcom,core-clk-rate-hs = <60000000>;
