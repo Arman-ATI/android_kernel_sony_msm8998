@@ -2219,8 +2219,8 @@
 			 <&clock_rpmcc RPM_SMD_LN_BB_CLK1>,
 			 <&clock_gcc GCC_USB3_CLKREF_CLK>;
 
-		clock-names = "aux_clk", "pipe_clk", "ref_clk_src",
-				"ref_clk";
+		clock-names = "aux_clk", "pipe_clk", "cfg_ahb_clk",
+				"ref_clk_src", "ref_clk";
 
 		resets = <&clock_gcc USB3_PHY_BCR>,
 			 <&clock_gcc USB3PHY_PHY_BCR>;
