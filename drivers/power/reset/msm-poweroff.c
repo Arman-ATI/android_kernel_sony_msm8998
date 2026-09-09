@@ -531,8 +531,12 @@ static void msm_restart_prepare(const char *cmd)
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
 		} else {
+			qpnp_pon_set_restart_reason(PON_RESTART_REASON_REBOOT);
 			__raw_writel(0x77665501, restart_reason);
 		}
+	} else {
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_REBOOT);
+		__raw_writel(0x776655AA, restart_reason);
 	}
 
 	flush_cache_all();
@@ -650,6 +654,8 @@ static int msm_restart_probe(struct platform_device *pdev)
 
 	force_warm_reboot = of_property_read_bool(dev->of_node,
 						"qcom,force-warm-reboot");
+	if (force_warm_reboot)
+		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
 
 	return 0;
 
