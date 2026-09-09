@@ -1,8 +1,14 @@
 Qualcomm Technologies, Inc. Secure Proccessor Communication (spcom)
 
 Required properties:
--compatible : should be "qcom,spcom"
+-compatible : should be "qcom,spcom" for Secure Processors preloaded by
+              UEFI. MSM8998 should use "qcom,msm8998-spcom" followed by
+              "qcom,spcom" as a fallback.
 -qcom,spcom-ch-names: predefined channels name string
+
+Required properties for "qcom,spcom":
+-qcom,spcom-rmb-err-reg-addr: Secure Processor boot error register physical
+                              address
 -qcom,spcom-sp2soc-rmb-reg-addr: Secure Processor to SOC shared
                                  register physical address
 -qcom,spcom-sp2soc-rmb-initdone-bit: bit indicating Secure
@@ -14,10 +20,14 @@ Required properties:
 -qcom,spcom-soc2sp-rmb-sp-ssr-bit: bit indicating Secure
                                    Processor subsystem reset
 
+The MSM8998-specific compatible uses the legacy, channel-name-only contract
+and must not provide the UEFI RMB properties.
+
 Example:
     qcom,spcom {
             compatible = "qcom,spcom";
             qcom,spcom-ch-names = "sp_kernel" , "sp_ssr";
+            qcom,spcom-rmb-err-reg-addr = <0x0188103c>;
             qcom,spcom-sp2soc-rmb-reg-addr = <0x01881020>;
             qcom,spcom-sp2soc-rmb-initdone-bit = <24>;
             qcom,spcom-sp2soc-rmb-pbldone-bit = <25>;

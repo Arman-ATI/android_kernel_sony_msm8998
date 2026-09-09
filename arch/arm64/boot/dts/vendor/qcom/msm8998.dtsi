@@ -1753,7 +1753,7 @@
 	};
 
 	qcom,spcom {
-		compatible = "qcom,spcom";
+		compatible = "qcom,msm8998-spcom", "qcom,spcom";
 
 		/* predefined channels, remote side is server */
 		qcom,spcom-ch-names = "sp_kernel" , "sp_ssr";

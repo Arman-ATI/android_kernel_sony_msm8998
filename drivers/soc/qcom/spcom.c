@@ -53,6 +53,7 @@
 #include <linux/poll.h>	/* POLLOUT */
 #include <linux/platform_device.h>
 #include <linux/of.h>		/* of_property_count_strings() */
+#include <linux/of_device.h>
 #include <linux/workqueue.h>
 #include <linux/delay.h>	/* msleep() */
 #include <linux/dma-buf.h>
@@ -270,6 +271,7 @@ struct spcom_device {
 	int32_t nvm_ion_fd;
 	struct mutex ioctl_lock;
 	struct mutex create_channel_lock;
+	bool use_uefi_rmb;
 };
 
 /* Device Driver State */
@@ -696,7 +698,7 @@ static int spcom_handle_restart_sp_command(void *cmd_buf, int cmd_size)
 	spcom_pr_dbg("restart - PIL FW loading initiated: preloaded=%d\n",
 		cmd->arg);
 
-	if (cmd->arg) {
+	if (cmd->arg && spcom_dev->use_uefi_rmb) {
 		subsystem_get_retval = find_subsys_device("spss");
 		if (!subsystem_get_retval) {
 			spcom_pr_err("restart - no device\n");
@@ -733,7 +735,7 @@ static int spcom_handle_restart_sp_command(void *cmd_buf, int cmd_size)
 		return -EINVAL;
 	}
 
-	if (cmd->arg) {
+	if (cmd->arg && spcom_dev->use_uefi_rmb) {
 
 		/* SPU got firmware update. Don't allow SSR*/
 		if (cmd->is_updated) {
@@ -1222,7 +1224,12 @@ static int spcom_handle_unlock_ion_buf_command(struct spcom_channel *ch,
 static int spcom_handle_enable_ssr_command(void)
 {
 	struct subsys_desc *desc_p = NULL;
-	void *subsystem_get_retval = find_subsys_device("spss");
+	void *subsystem_get_retval;
+
+	if (!spcom_dev->use_uefi_rmb)
+		return -EOPNOTSUPP;
+
+	subsystem_get_retval = find_subsys_device("spss");
 
 	if (!subsystem_get_retval) {
 		spcom_pr_err("restart - no device\n");
@@ -1874,14 +1881,16 @@ static inline int handle_poll(struct file *file,
 					  &spcom_dev->rpmsg_state_change);
 			spcom_pr_dbg("ch [%s] link state change signaled\n",
 				     name);
-			regs = ioremap_nocache(spcom_soc2sp_rmb_reg_addr,
-					sizeof(u32));
-			if (regs) {
-				writel_relaxed(spcom_soc2sp_rmb_sp_ssr_mask,
-					regs);
-				iounmap(regs);
-			} else {
-				spcom_pr_err("failed to set register indicating SSR\n");
+			if (spcom_dev->use_uefi_rmb) {
+				regs = ioremap_nocache(spcom_soc2sp_rmb_reg_addr,
+						       sizeof(u32));
+				if (regs) {
+					writel_relaxed(spcom_soc2sp_rmb_sp_ssr_mask,
+						       regs);
+					iounmap(regs);
+				} else {
+					spcom_pr_err("failed to set register indicating SSR\n");
+				}
 			}
 		}
 		op->retval = atomic_read(&spcom_dev->rpmsg_dev_count) > 0;
@@ -2152,13 +2161,9 @@ static void spcom_unregister_chrdev(void)
 
 }
 
-static int spcom_parse_dt(struct device_node *np)
+static int spcom_parse_rmb_dt(struct device_node *np)
 {
 	int ret;
-	const char *propname = "qcom,spcom-ch-names";
-	int num_ch;
-	int i;
-	const char *name;
 	u32 sp2soc_rmb_pbldone_bit = 0;
 	u32 sp2soc_rmb_initdone_bit = 0;
 	u32 soc2sp_rmb_sp_ssr_bit = 0;
@@ -2211,6 +2216,22 @@ static int spcom_parse_dt(struct device_node *np)
 	}
 
 	spcom_soc2sp_rmb_sp_ssr_mask = BIT(soc2sp_rmb_sp_ssr_bit);
+	return 0;
+}
+
+static int spcom_parse_dt(struct device_node *np)
+{
+	const char *propname = "qcom,spcom-ch-names";
+	const char *name;
+	int num_ch;
+	int ret;
+	int i;
+
+	if (spcom_dev->use_uefi_rmb) {
+		ret = spcom_parse_rmb_dt(np);
+		if (ret)
+			return ret;
+	}
 
 	/* Get predefined channels info */
 	num_ch = of_property_count_strings(np, propname);
@@ -2515,6 +2536,7 @@ static int spcom_unregister_rpmsg_drv(struct spcom_channel *ch)
 
 static int spcom_probe(struct platform_device *pdev)
 {
+	const bool *use_uefi_rmb;
 	int ret;
 	struct spcom_device *dev = NULL;
 	struct device_node *np;
@@ -2536,6 +2558,12 @@ static int spcom_probe(struct platform_device *pdev)
 
 	spcom_dev = dev;
 	spcom_dev->pdev = pdev;
+	use_uefi_rmb = of_device_get_match_data(&pdev->dev);
+	if (!use_uefi_rmb) {
+		ret = -EINVAL;
+		goto fail_while_chardev_reg;
+	}
+	spcom_dev->use_uefi_rmb = *use_uefi_rmb;
 	/* start counting exposed channel char devices from 1 */
 	atomic_set(&spcom_dev->chdev_count, 1);
 	init_completion(&spcom_dev->rpmsg_state_change);
@@ -2580,8 +2608,18 @@ fail_while_chardev_reg:
 	return -ENODEV;
 }
 
+static const bool spcom_legacy_channels;
+static const bool spcom_uefi_rmb = true;
+
 static const struct of_device_id spcom_match_table[] = {
-	{ .compatible = "qcom,spcom", },
+	{
+		.compatible = "qcom,msm8998-spcom",
+		.data = &spcom_legacy_channels,
+	},
+	{
+		.compatible = "qcom,spcom",
+		.data = &spcom_uefi_rmb,
+	},
 	{ },
 };
 
