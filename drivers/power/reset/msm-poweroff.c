@@ -27,14 +27,14 @@
 #include <soc/qcom/watchdog.h>
 #include <soc/qcom/minidump.h>
 
+#define SCM_IO_DISABLE_PMIC_ARBITER	1
+#define SCM_IO_DEASSERT_PS_HOLD		2
+#define SCM_WDOG_DEBUG_BOOT_PART	0x9
+#ifdef CONFIG_QCOM_DLOAD_MODE
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
 #define EMERGENCY_DLOAD_MAGIC3    0x77777777
 #define EMMC_DLOAD_TYPE		0x2
-
-#define SCM_IO_DISABLE_PMIC_ARBITER	1
-#define SCM_IO_DEASSERT_PS_HOLD		2
-#define SCM_WDOG_DEBUG_BOOT_PART	0x9
 #define SCM_DLOAD_FULLDUMP		0X10
 #define SCM_EDLOAD_MODE			0X01
 #define SCM_DLOAD_CMD			0x10
@@ -44,12 +44,13 @@
 #define DL_MODE_PROP "qcom,msm-imem-download_mode"
 #define EDL_MODE_PROP "qcom,msm-imem-emergency_download_mode"
 #define IMEM_DL_TYPE_PROP "qcom,msm-imem-dload-type"
+#endif
 
 #define KASLR_OFFSET_PROP "qcom,msm-imem-kaslr_offset"
 #define KASLR_OFFSET_BIT_MASK	0x00000000FFFFFFFF
 
 static int restart_mode;
-static void *restart_reason, *dload_type_addr;
+static void *restart_reason;
 static bool scm_pmic_arbiter_disable_supported;
 static bool scm_deassert_ps_hold_supported;
 /* Download mode master kill-switch */
@@ -62,18 +63,21 @@ static void scm_disable_sdi(void);
  * There is no API from TZ to re-enable the registers.
  * So the SDI cannot be re-enabled when it already by-passed.
  */
+#ifdef CONFIG_QCOM_DLOAD_MODE
 static int download_mode = 1;
 static struct kobject dload_kobj;
-
+static void *dload_type_addr;
 static int in_panic;
 static int dload_type = SCM_DLOAD_FULLDUMP;
 static void *dload_mode_addr;
 static bool dload_mode_enabled;
 static void *emergency_dload_mode_addr;
 static bool scm_dload_supported;
+#endif
 
 static bool force_warm_reboot;
 
+#ifdef CONFIG_QCOM_DLOAD_MODE
 /* interface for exporting attributes */
 struct reset_attribute {
 	struct attribute        attr;
@@ -422,6 +426,26 @@ static size_t store_dload_mode(struct kobject *kobj, struct attribute *attr,
 }
 #endif /* CONFIG_QCOM_MINIDUMP */
 
+#else /* !CONFIG_QCOM_DLOAD_MODE */
+
+static void set_dload_mode(int on)
+{
+	if (tcsr_boot_misc_detect)
+		scm_io_write(tcsr_boot_misc_detect, 0);
+}
+
+static bool get_dload_mode(void)
+{
+	return false;
+}
+
+static void enable_emergency_dload_mode(void)
+{
+	pr_err("dload mode is not enabled on target\n");
+}
+
+#endif /* CONFIG_QCOM_DLOAD_MODE */
+
 static void scm_disable_sdi(void)
 {
 	int ret;
@@ -467,6 +491,7 @@ static void halt_spmi_pmic_arbiter(void)
 static void msm_restart_prepare(const char *cmd)
 {
 	bool need_warm_reset = false;
+#ifdef CONFIG_QCOM_DLOAD_MODE
 	/* Write download mode flags if we're panic'ing
 	 * Write download mode flags if restart_mode says so
 	 * Kill download mode if master-kill switch is set
@@ -474,6 +499,9 @@ static void msm_restart_prepare(const char *cmd)
 
 	set_dload_mode(download_mode &&
 			(in_panic || restart_mode == RESTART_DLOAD));
+#else
+	set_dload_mode(0);
+#endif
 
 	if (qpnp_pon_check_hard_reset_stored()) {
 		/* Set warm reset as true when device is in dload mode */
@@ -578,12 +606,14 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 
 	msm_restart_prepare(cmd);
 
+#ifdef CONFIG_QCOM_DLOAD_MODE
 	/*
 	 * Trigger a watchdog bite here and if this fails,
 	 * device will take the usual restart path.
 	 */
 	if (WDOG_BITE_ON_PANIC && in_panic)
 		msm_trigger_wdog_bite();
+#endif
 
 	scm_disable_sdi();
 	halt_spmi_pmic_arbiter();
@@ -614,7 +644,9 @@ static int msm_restart_probe(struct platform_device *pdev)
 	struct device_node *np;
 	int ret = 0;
 
+#ifdef CONFIG_QCOM_DLOAD_MODE
 	setup_dload_mode_support();
+#endif
 
 	np = of_find_compatible_node(NULL, NULL,
 				"qcom,msm-imem-restart_reason");
@@ -648,9 +680,14 @@ static int msm_restart_probe(struct platform_device *pdev)
 	if (scm_is_call_available(SCM_SVC_PWR, SCM_IO_DEASSERT_PS_HOLD) > 0)
 		scm_deassert_ps_hold_supported = true;
 
+#ifdef CONFIG_QCOM_DLOAD_MODE
 	set_dload_mode(download_mode);
 	if (!download_mode)
 		scm_disable_sdi();
+#else
+	set_dload_mode(0);
+	scm_disable_sdi();
+#endif
 
 	force_warm_reboot = of_property_read_bool(dev->of_node,
 						"qcom,force-warm-reboot");
@@ -660,7 +697,9 @@ static int msm_restart_probe(struct platform_device *pdev)
 	return 0;
 
 err_restart_reason:
+#ifdef CONFIG_QCOM_DLOAD_MODE
 	free_dload_mode_mem();
+#endif
 	return ret;
 }
 
