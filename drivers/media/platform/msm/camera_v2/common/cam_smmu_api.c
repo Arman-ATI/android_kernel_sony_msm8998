@@ -161,6 +161,7 @@ struct cam_sec_buff_info {
 };
 
 static struct cam_iommu_cb_set iommu_cb_set;
+static DEFINE_MUTEX(iommu_cb_set_lock);
 
 static enum dma_data_direction cam_smmu_translate_dir(
 	enum cam_smmu_map_dir dir);
@@ -468,9 +469,15 @@ static enum dma_data_direction cam_smmu_translate_dir(
 static void cam_smmu_reset_iommu_table(enum cam_smmu_init_dir ops)
 {
 	unsigned int i;
+	unsigned int count;
 	int j = 0;
 
-	for (i = 0; i < iommu_cb_set.cb_num; i++) {
+	if (!iommu_cb_set.cb_info)
+		return;
+
+	count = ops == CAM_SMMU_TABLE_INIT ? iommu_cb_set.cb_num :
+		min(iommu_cb_set.cb_init_count, iommu_cb_set.cb_num);
+	for (i = 0; i < count; i++) {
 		iommu_cb_set.cb_info[i].handle = HANDLE_INIT;
 		INIT_LIST_HEAD(&iommu_cb_set.cb_info[i].smmu_buf_list);
 		iommu_cb_set.cb_info[i].state = CAM_SMMU_DETACH;
@@ -489,6 +496,20 @@ static void cam_smmu_reset_iommu_table(enum cam_smmu_init_dir ops)
 		else
 			mutex_destroy(&iommu_cb_set.cb_info[i].lock);
 	}
+}
+
+static void cam_smmu_reset_unpublished_cb(struct cam_context_bank_info *cb)
+{
+	int i;
+
+	mutex_destroy(&cb->lock);
+	memset(cb, 0, sizeof(*cb));
+	cb->handle = HANDLE_INIT;
+	cb->state = CAM_SMMU_DETACH;
+	INIT_LIST_HEAD(&cb->smmu_buf_list);
+	for (i = 0; i < CAM_SMMU_SID_MAX; i++)
+		cb->sids[i] = -1;
+	mutex_init(&cb->lock);
 }
 
 static int cam_smmu_check_handle_unique(int hdl)
@@ -546,10 +567,22 @@ static int cam_smmu_create_add_handle_in_table(char *name,
 {
 	int i;
 	int handle;
+	int rc = -EINVAL;
+	u32 cb_init_count;
+
+	mutex_lock(&iommu_cb_set_lock);
+	if (!iommu_cb_set.cb_info || !iommu_cb_set.cb_num ||
+		iommu_cb_set.cb_init_count > iommu_cb_set.cb_num) {
+		rc = -EPROBE_DEFER;
+		goto done;
+	}
+
+	cb_init_count = iommu_cb_set.cb_init_count;
 
 	/* create handle and add in the iommu hardware table */
-	for (i = 0; i < iommu_cb_set.cb_num; i++) {
-		if (!strcmp(iommu_cb_set.cb_info[i].name, name)) {
+	for (i = 0; i < cb_init_count; i++) {
+		if (iommu_cb_set.cb_info[i].name &&
+			!strcmp(iommu_cb_set.cb_info[i].name, name)) {
 			mutex_lock(&iommu_cb_set.cb_info[i].lock);
 			if (iommu_cb_set.cb_info[i].handle != HANDLE_INIT) {
 				pr_err("Error: %s already got handle 0x%x\n",
@@ -558,7 +591,8 @@ static int cam_smmu_create_add_handle_in_table(char *name,
 				*hdl = iommu_cb_set.cb_info[i].handle;
 				iommu_cb_set.cb_info[i].ref_cnt++;
 				mutex_unlock(&iommu_cb_set.cb_info[i].lock);
-				return -EINVAL;
+				rc = -EINVAL;
+				goto done;
 			}
 
 			/* make sure handle is unique */
@@ -573,15 +607,22 @@ static int cam_smmu_create_add_handle_in_table(char *name,
 			*hdl = handle;
 			CDBG("%s creates handle 0x%x\n", name, handle);
 			mutex_unlock(&iommu_cb_set.cb_info[i].lock);
-			return 0;
+			rc = 0;
+			goto done;
 		}
 	}
 
-	/* if i == iommu_cb_set.cb_num */
+	if (cb_init_count < iommu_cb_set.cb_num) {
+		rc = -EPROBE_DEFER;
+		goto done;
+	}
+
 	pr_err("Error: Cannot find name %s or all handle exist!\n",
 			name);
 	cam_smmu_print_table();
-	return -EINVAL;
+done:
+	mutex_unlock(&iommu_cb_set_lock);
+	return rc;
 }
 
 static int cam_smmu_init_scratch_map(struct scratch_mapping *scratch_map,
@@ -2051,13 +2092,18 @@ int cam_smmu_get_num_of_clients(void)
 static void cam_smmu_release_cb(struct platform_device *pdev)
 {
 	int i = 0;
+	u32 count;
 
-	for (i = 0; i < iommu_cb_set.cb_num; i++) {
-		iommu_detach_device(iommu_cb_set.cb_info[i].domain,
-				iommu_cb_set.cb_info[i].dev);
+	if (!iommu_cb_set.cb_info)
+		return;
+
+	count = min(iommu_cb_set.cb_init_count, iommu_cb_set.cb_num);
+	for (i = 0; i < count; i++) {
+		if (iommu_cb_set.cb_info[i].domain &&
+			iommu_cb_set.cb_info[i].dev)
+			iommu_detach_device(iommu_cb_set.cb_info[i].domain,
+					iommu_cb_set.cb_info[i].dev);
 	}
-
-	iommu_cb_set.cb_num = 0;
 }
 
 static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
@@ -2135,13 +2181,17 @@ static int cam_smmu_populate_sids(struct device *dev,
 static int cam_alloc_smmu_context_banks(struct device *dev)
 {
 	struct device_node *domains_child_node = NULL;
+	int rc = 0;
 
 	if (!dev) {
 		pr_err("Error: Invalid device\n");
 		return -ENODEV;
 	}
 
+	mutex_lock(&iommu_cb_set_lock);
 	iommu_cb_set.cb_num = 0;
+	iommu_cb_set.cb_init_count = 0;
+	iommu_cb_set.cb_info = NULL;
 
 	/* traverse thru all the child nodes and increment the cb count */
 	for_each_child_of_node(dev->of_node, domains_child_node) {
@@ -2156,7 +2206,8 @@ static int cam_alloc_smmu_context_banks(struct device *dev)
 
 	if (iommu_cb_set.cb_num == 0) {
 		pr_err("Error: no context banks present\n");
-		return -ENOENT;
+		rc = -ENOENT;
+		goto done;
 	}
 
 	/* allocate memory for the context banks */
@@ -2166,14 +2217,17 @@ static int cam_alloc_smmu_context_banks(struct device *dev)
 
 	if (!iommu_cb_set.cb_info) {
 		pr_err("Error: cannot allocate context banks\n");
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto done;
 	}
 
 	cam_smmu_reset_iommu_table(CAM_SMMU_TABLE_INIT);
 	iommu_cb_set.cb_init_count = 0;
 
 	CDBG("no of context banks :%d\n", iommu_cb_set.cb_num);
-	return 0;
+done:
+	mutex_unlock(&iommu_cb_set_lock);
+	return rc;
 }
 
 static int cam_populate_smmu_context_banks(struct device *dev,
@@ -2186,6 +2240,12 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 	if (!dev) {
 		pr_err("Error: Invalid device\n");
 		return -ENODEV;
+	}
+
+	mutex_lock(&iommu_cb_set_lock);
+	if (!iommu_cb_set.cb_info || !iommu_cb_set.cb_num) {
+		rc = -EPROBE_DEFER;
+		goto cb_init_fail;
 	}
 
 	/* check the bounds */
@@ -2207,8 +2267,10 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 
 	/* populate SID's for each cb */
 	rc = cam_smmu_populate_sids(dev, cb);
-	if (rc < 0)
+	if (rc < 0) {
 		pr_err("Error: failed to populate sids : %s\n", cb->name);
+		goto cb_init_fail;
+	}
 
 	/* Check if context bank supports scratch buffers */
 	if (of_property_read_bool(dev->of_node, "qcom,scratch-buf-support"))
@@ -2228,14 +2290,17 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 	/* set up the iommu mapping for the  context bank */
 	if (type == CAM_QSMMU) {
 		pr_err("Error: QSMMU ctx not supported for: %s\n", cb->name);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto cb_init_fail;
 	}
 		ctx = dev;
 		CDBG("getting Arm SMMU ctx : %s\n", cb->name);
 
 	rc = cam_smmu_setup_cb(cb, ctx);
-	if (rc < 0)
+	if (rc < 0) {
 		pr_err("Error: failed to setup cb : %s\n", cb->name);
+		goto cb_init_fail;
+	}
 
 	iommu_set_fault_handler(cb->domain,
 			cam_smmu_iommu_fault_handler,
@@ -2243,18 +2308,25 @@ static int cam_populate_smmu_context_banks(struct device *dev,
 
 	if (iommu_cb_set.camera_secure_sid) {
 		rc = cam_smmu_attach(iommu_cb_set.cb_init_count);
-		if (rc)
+		if (rc) {
 			pr_err("Error: SMMU attach failed for %s\n", cb->name);
+			goto cb_init_fail;
+		}
 	}
 
 	/* increment count to next bank */
 	iommu_cb_set.cb_init_count++;
 
 	CDBG("X: cb init count :%d\n", iommu_cb_set.cb_init_count);
+	mutex_unlock(&iommu_cb_set_lock);
 	return rc;
 
 cb_init_fail:
-	iommu_cb_set.cb_info = NULL;
+	if (iommu_cb_set.cb_info &&
+		iommu_cb_set.cb_init_count < iommu_cb_set.cb_num)
+		cam_smmu_reset_unpublished_cb(
+			&iommu_cb_set.cb_info[iommu_cb_set.cb_init_count]);
+	mutex_unlock(&iommu_cb_set_lock);
 	return rc;
 }
 
@@ -2267,14 +2339,14 @@ static int cam_smmu_probe(struct platform_device *pdev)
 		rc = cam_alloc_smmu_context_banks(dev);
 		if (rc < 0)	{
 			pr_err("Error: allocating context banks\n");
-			return -ENOMEM;
+			return rc;
 		}
 	}
 	if (of_device_is_compatible(dev->of_node, "qcom,msm-cam-smmu-cb")) {
 		rc = cam_populate_smmu_context_banks(dev, CAM_ARM_SMMU);
 		if (rc < 0) {
 			pr_err("Error: populating context banks\n");
-			return -ENOMEM;
+			return rc;
 		}
 		return rc;
 	}
@@ -2282,7 +2354,7 @@ static int cam_smmu_probe(struct platform_device *pdev)
 		rc = cam_populate_smmu_context_banks(dev, CAM_QSMMU);
 		if (rc < 0) {
 			pr_err("Error: populating context banks\n");
-			return -ENOMEM;
+			return rc;
 		}
 		return rc;
 	}
@@ -2307,10 +2379,18 @@ static int cam_smmu_probe(struct platform_device *pdev)
 
 static int cam_smmu_remove(struct platform_device *pdev)
 {
+	if (!of_device_is_compatible(pdev->dev.of_node,
+		"qcom,msm-cam-smmu"))
+		return 0;
+
+	mutex_lock(&iommu_cb_set_lock);
 	/* release all the context banks and memory allocated */
+	cam_smmu_release_cb(pdev);
 	cam_smmu_reset_iommu_table(CAM_SMMU_TABLE_DEINIT);
-	if (of_device_is_compatible(pdev->dev.of_node, "qcom,msm-cam-smmu"))
-		cam_smmu_release_cb(pdev);
+	iommu_cb_set.cb_info = NULL;
+	iommu_cb_set.cb_num = 0;
+	iommu_cb_set.cb_init_count = 0;
+	mutex_unlock(&iommu_cb_set_lock);
 	return 0;
 }
 
