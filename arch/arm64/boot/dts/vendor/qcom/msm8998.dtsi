@@ -3339,6 +3339,18 @@
 */
 &pm8998_adc_tm {
 	qcom,adc-bit-resolution = <15>;
+
+	/*
+	 * ICNSS monitors VPH_PWR from the kernel rather than through a thermal
+	 * zone. A board that describes this monitor must list ADC_VPH_PWR in
+	 * its own io-channels, which the driver checks against the child count.
+	 */
+	vph_pwr {
+		reg = <ADC_VPH_PWR>;
+		qcom,kernel-client;
+		qcom,scale-type = <0>;
+		qcom,prescaling = <3>;
+	};
 };
 
 &pm8998_div_clk1 {
