@@ -18,6 +18,11 @@
 
 struct msm_bus_arb_ops arb_ops;
 
+bool msm_bus_scale_driver_ready(void)
+{
+	return arb_ops.register_client;
+}
+
 /**
  * msm_bus_scale_register_client() - Register the clients with the msm bus
  * driver
