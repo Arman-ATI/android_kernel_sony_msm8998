@@ -289,7 +289,10 @@ static void gsi_channel_state_change_wait(unsigned long chan_hdl,
 		GSI_EE_n_GSI_CH_k_CNTXT_0_CHSTATE_SHFT;
 	GSIDBG("Channel state change timeout, curr ch_state=%d\n",
 		ctx->state);
-	if (op == GSI_CH_STOP && gsi_msm8998_channel_state_lost(ctx))
+	if (op == GSI_CH_STOP &&
+		(ctx->state == GSI_CHAN_STATE_STOPPED ||
+		 ctx->state == GSI_CHAN_STATE_STOP_IN_PROC ||
+		 gsi_msm8998_channel_state_lost(ctx)))
 		return;
 	GSI_ASSERT();
 }
