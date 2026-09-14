@@ -336,6 +336,7 @@ struct dwc3_msm {
 	bool			hc_died;
 
 	struct extcon_nb	*extcon;
+	int			extcon_count;
 	int			ext_idx;
 	struct notifier_block	host_nb;
 
@@ -3443,6 +3444,7 @@ static int dwc3_msm_extcon_register(struct dwc3_msm *mdwc)
 					sizeof(*mdwc->extcon), GFP_KERNEL);
 	if (!mdwc->extcon)
 		return -ENOMEM;
+	mdwc->extcon_count = extcon_cnt;
 
 	for (idx = 0; idx < extcon_cnt; idx++) {
 		edev = extcon_get_edev_by_phandle(mdwc->dev, idx);
@@ -3493,6 +3495,26 @@ static int dwc3_msm_extcon_register(struct dwc3_msm *mdwc)
 	}
 
 	return 0;
+}
+
+static void dwc3_msm_extcon_replay(struct dwc3_msm *mdwc)
+{
+	struct extcon_dev *edev;
+	int idx;
+
+	for (idx = 0; idx < mdwc->extcon_count; idx++) {
+		edev = mdwc->extcon[idx].edev;
+		if (!edev)
+			continue;
+
+		if (extcon_get_state(edev, EXTCON_USB) > 0) {
+			dwc3_msm_vbus_notifier(&mdwc->extcon[idx].vbus_nb,
+					       true, edev);
+		} else if (extcon_get_state(edev, EXTCON_USB_HOST) > 0) {
+			dwc3_msm_id_notifier(&mdwc->extcon[idx].id_nb,
+					     true, edev);
+		}
+	}
 }
 
 static ssize_t orientation_show(struct device *dev,
@@ -3736,14 +3758,19 @@ static ssize_t usb_data_enabled_store(struct device *dev,
 				      const char *buf, size_t count)
 {
 	struct dwc3_msm *mdwc = dev_get_drvdata(dev);
+	bool enabled;
+	bool was_enabled = mdwc->usb_data_enabled;
 
-	if (kstrtobool(buf, &mdwc->usb_data_enabled))
+	if (kstrtobool(buf, &enabled))
 		return -EINVAL;
 
-	if (!mdwc->usb_data_enabled) {
+	mdwc->usb_data_enabled = enabled;
+	if (!enabled) {
 		mdwc->vbus_active = false;
 		mdwc->id_state = DWC3_ID_FLOAT;
 		dwc3_ext_event_notify(mdwc);
+	} else if (!was_enabled && mdwc->extcon) {
+		dwc3_msm_extcon_replay(mdwc);
 	}
 
 	return count;
