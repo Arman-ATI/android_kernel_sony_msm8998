@@ -326,13 +326,13 @@ static unsigned long uaudio_iommu_map(enum mem_type mtype, phys_addr_t pa,
 			IOMMU_READ | IOMMU_WRITE | IOMMU_MMIO);
 		if (ret) {
 			uaudio_err("mapping failed ret%d\n", ret);
-			uaudio_err("memtype:%d, pa:%pK iova:%lu sg_len:%zu\n",
+			uaudio_err("memtype:%d, pa:%pa iova:%lu sg_len:%zu\n",
 				mtype, &pa_sg, va_sg, sg_len);
 			uaudio_iommu_unmap(MEM_XFER_BUF, va, size, total_len);
 			va = 0;
 			goto done;
 		}
-		uaudio_dbg("memtype %d:map pa:%pK to iova:%lu len:%zu\n", mtype,
+		uaudio_dbg("memtype %d:map pa:%pa to iova:%lu len:%zu\n", mtype,
 				&pa_sg, va_sg, sg_len);
 		va_sg += sg_len;
 		total_len += sg_len;
@@ -347,13 +347,13 @@ static unsigned long uaudio_iommu_map(enum mem_type mtype, phys_addr_t pa,
 	return va;
 
 skip_sgt_map:
-	uaudio_dbg("memtype:%d map pa:%pK to iova %lu size:%zu\n", mtype, &pa,
+	uaudio_dbg("memtype:%d map pa:%pa to iova %lu size:%zu\n", mtype, &pa,
 			va, size);
 
 	ret = iommu_map(uaudio_qdev->domain, va, pa, size,
 		IOMMU_READ | IOMMU_WRITE | IOMMU_MMIO);
 	if (ret)
-		uaudio_err("failed to map pa:%pK iova:%lu memtype:%d ret:%d\n",
+		uaudio_err("failed to map pa:%pa iova:%lu memtype:%d ret:%d\n",
 				&pa, va, mtype, ret);
 done:
 	return va;
