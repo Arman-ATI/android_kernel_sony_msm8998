@@ -2227,7 +2227,7 @@
 		reset-names = "phy_reset", "phy_phy_reset";
 	};
 
-	usb_audio_qmi_dev {
+	usb_audio_qmi_dev: usb_audio_qmi_dev {
 		compatible = "qcom,usb-audio-qmi-dev";
 		iommus = <&lpass_q6_smmu 12>;
 		qcom,usb-audio-stream-id = <12>;
