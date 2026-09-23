@@ -833,7 +833,8 @@ static int ipa3_rx_switch_to_intr_mode(struct ipa3_sys_context *sys)
 
 	atomic_set(&sys->curr_polling_state, 0);
 	__ipa3_update_curr_poll_state(sys->ep->client, 0);
-	ipa_pm_deferred_deactivate(sys->pm_hdl);
+	if (ipa3_ctx->use_ipa_pm)
+		ipa_pm_deferred_deactivate(sys->pm_hdl);
 	ipa3_dec_release_wakelock();
 	ret = gsi_config_channel_mode(sys->ep->gsi_chan_hdl,
 		GSI_CHAN_MODE_CALLBACK);
@@ -867,7 +868,8 @@ static void ipa3_handle_rx(struct ipa3_sys_context *sys)
 	int ret;
 
 start_poll:
-	ipa_pm_activate_sync(sys->pm_hdl);
+	if (ipa3_ctx->use_ipa_pm)
+		ipa_pm_activate_sync(sys->pm_hdl);
 	inactive_cycles = 0;
 	do {
 		cnt = ipa3_handle_rx_core(sys, true, true);
@@ -5083,7 +5085,8 @@ start_poll:
 	 * it is guaranteed we already have clock here.
 	 * This is mainly for clock scaling.
 	 */
-	ipa_pm_activate(ep->sys->pm_hdl);
+	if (ipa3_ctx->use_ipa_pm)
+		ipa_pm_activate(ep->sys->pm_hdl);
 	while (remain_aggr_weight > 0 &&
 			atomic_read(&ep->sys->curr_polling_state)) {
 		atomic_set(&ipa3_ctx->transport_pm.eot_activity, 1);
@@ -5170,7 +5173,8 @@ start_poll:
 	 * it is guaranteed we already have clock here.
 	 * This is mainly for clock scaling.
 	 */
-	ipa_pm_activate(ep->sys->pm_hdl);
+	if (ipa3_ctx->use_ipa_pm)
+		ipa_pm_activate(ep->sys->pm_hdl);
 	while (remain_aggr_weight > 0 &&
 			atomic_read(&ep->sys->curr_polling_state)) {
 		atomic_set(&ipa3_ctx->transport_pm.eot_activity, 1);
