@@ -2230,6 +2230,7 @@
 	usb_audio_qmi_dev: usb_audio_qmi_dev {
 		compatible = "qcom,usb-audio-qmi-dev";
 		iommus = <&lpass_q6_smmu 12>;
+		qcom,iommu-dma = "disabled";
 		qcom,usb-audio-stream-id = <12>;
 		qcom,usb-audio-intr-num = <2>;
 	};
