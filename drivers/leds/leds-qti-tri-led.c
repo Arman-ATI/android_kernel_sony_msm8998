@@ -315,6 +315,8 @@ static int qpnp_tri_led_set_blink(struct led_classdev *led_cdev,
 		container_of(led_cdev, struct qpnp_led_dev, cdev);
 	int rc = 0;
 
+	cancel_work_sync(&led_cdev->set_brightness_work);
+
 	mutex_lock(&led->lock);
 	if (led->blinking && *on_ms == led->led_setting.on_ms &&
 			*off_ms == led->led_setting.off_ms) {
