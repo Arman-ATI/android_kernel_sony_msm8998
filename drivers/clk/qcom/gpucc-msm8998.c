@@ -443,14 +443,14 @@ static void enable_gfx_crc(struct regmap *regmap)
 }
 
 
-static struct clk_regmap *gpucc_msm8998_clocks[] = {
+static struct clk_regmap *gfxcc_msm8998_clocks[] = {
 	[GPU_PLL0_PLL] = &gpu_pll0_pll.clkr,
 	[GPU_PLL0_PLL_OUT_EVEN] = &gpu_pll0_out_even.clkr,
 	[GFX3D_CLK_SRC] = &gfx3d_clk_src.clkr,
 	[GPUCC_GFX3D_CLK] = &gpucc_gfx3d_clk.clkr,
 };
 
-static struct clk_regmap *gpucc_msm8998_early_clocks[] = {
+static struct clk_regmap *gpucc_msm8998_clocks[] = {
 	[GPUCC_XO] = &gpucc_xo.clkr,
 	[RBCPR_CLK_SRC] = &rbcpr_clk_src.clkr,
 	[GPUCC_RBCPR_CLK] = &gpucc_rbcpr_clk.clkr,
@@ -468,13 +468,13 @@ static const struct regmap_config gpucc_msm8998_regmap_config = {
 	.fast_io	= true,
 };
 
-static const struct qcom_cc_desc gpucc_msm8998_desc = {
+static const struct qcom_cc_desc gfxcc_msm8998_desc = {
 	.config = &gpucc_msm8998_regmap_config,
-	.clks = gpucc_msm8998_clocks,
-	.num_clks = ARRAY_SIZE(gpucc_msm8998_clocks),
+	.clks = gfxcc_msm8998_clocks,
+	.num_clks = ARRAY_SIZE(gfxcc_msm8998_clocks),
 };
 
-int gpucc_msm8998_probe(struct platform_device *pdev)
+int gfxcc_msm8998_probe(struct platform_device *pdev)
 {
 	struct resource *res;
 	struct regmap *regmap;
@@ -510,17 +510,10 @@ int gpucc_msm8998_probe(struct platform_device *pdev)
 	}
 
 	regmap = devm_regmap_init_mmio(&pdev->dev, base,
-					gpucc_msm8998_desc.config);
+					gfxcc_msm8998_desc.config);
 	if (IS_ERR(regmap)) {
 		dev_err(&pdev->dev, "Failed to init regmap\n");
 		return PTR_ERR(regmap);
-	}
-	/* Early GPUCC is responsible for this, check if it succeeded */
-	if (IS_ERR(vdd_dig.regulator[0])) {
-		if (PTR_ERR(vdd_dig.regulator[0]) != -EPROBE_DEFER)
-			dev_err(&pdev->dev,
-				"Unable to get vdd_dig regulator\n");
-		return PTR_ERR(vdd_dig.regulator[0]);
 	}
 
 	vdd_gpucc.regulator[0] = devm_regulator_get(&pdev->dev, "vdd_gpucc");
@@ -544,7 +537,7 @@ int gpucc_msm8998_probe(struct platform_device *pdev)
 
 	clk_fabia_pll_configure(&gpu_pll0_pll, regmap, &gpu_pll0_config);
 
-	rc = qcom_cc_really_probe(pdev, &gpucc_msm8998_desc, regmap);
+	rc = qcom_cc_really_probe(pdev, &gfxcc_msm8998_desc, regmap);
 	if (rc) {
 		dev_err(&pdev->dev, "Failed to register GPUCC clocks\n");
 		return rc;
@@ -564,37 +557,37 @@ int gpucc_msm8998_probe(struct platform_device *pdev)
 	 */
 	regmap_update_bits(regmap, 0x430, BIT(0), BIT(0));
 
-	dev_info(&pdev->dev, "Registered GPUCC clocks\n");
+	dev_info(&pdev->dev, "Registered GFXCC clocks\n");
 	return 0;
 }
 
-static const struct of_device_id gpucc_msm8998_match_table[] = {
-	{ .compatible = "qcom,gpucc-msm8998" },
+static const struct of_device_id gfxcc_msm8998_match_table[] = {
+	{ .compatible = "qcom,gfxcc-msm8998" },
 	{},
 };
 
-static struct platform_driver gpucc_msm8998_driver = {
-	.probe = gpucc_msm8998_probe,
+static struct platform_driver gfxcc_msm8998_driver = {
+	.probe = gfxcc_msm8998_probe,
 	.driver = {
-		.name = "qcom,gpucc-msm8998",
-		.of_match_table = gpucc_msm8998_match_table,
+		.name = "qcom,gfxcc-msm8998",
+		.of_match_table = gfxcc_msm8998_match_table,
 		.owner = THIS_MODULE,
 	},
 };
 
-int __init gpucc_msm8998_init(void)
+int __init gfxcc_msm8998_init(void)
 {
-	return platform_driver_register(&gpucc_msm8998_driver);
+	return platform_driver_register(&gfxcc_msm8998_driver);
 }
-arch_initcall(gpucc_msm8998_init);
+arch_initcall(gfxcc_msm8998_init);
 
-static const struct qcom_cc_desc gpucc_early_msm8998_desc = {
+static const struct qcom_cc_desc gpucc_msm8998_desc = {
 	.config = &gpucc_msm8998_regmap_config,
-	.clks = gpucc_msm8998_early_clocks,
-	.num_clks = ARRAY_SIZE(gpucc_msm8998_early_clocks),
+	.clks = gpucc_msm8998_clocks,
+	.num_clks = ARRAY_SIZE(gpucc_msm8998_clocks),
 };
 
-int gpucc_early_msm8998_probe(struct platform_device *pdev)
+int gpucc_msm8998_probe(struct platform_device *pdev)
 {
 	struct resource *res;
 	struct regmap *regmap;
@@ -623,7 +616,7 @@ int gpucc_early_msm8998_probe(struct platform_device *pdev)
 	}
 
 	regmap = devm_regmap_init_mmio(&pdev->dev, base,
-					gpucc_early_msm8998_desc.config);
+					gpucc_msm8998_desc.config);
 	if (IS_ERR(regmap)) {
 		dev_err(&pdev->dev, "Failed to init regmap\n");
 		return PTR_ERR(regmap);
@@ -637,7 +630,7 @@ int gpucc_early_msm8998_probe(struct platform_device *pdev)
 		return PTR_ERR(vdd_dig.regulator[0]);
 	}
 
-	rc = qcom_cc_really_probe(pdev, &gpucc_early_msm8998_desc, regmap);
+	rc = qcom_cc_really_probe(pdev, &gpucc_msm8998_desc, regmap);
 	if (rc) {
 		dev_err(&pdev->dev, "Failed to register GPUCC clocks\n");
 		return rc;
@@ -652,26 +645,26 @@ int gpucc_early_msm8998_probe(struct platform_device *pdev)
 	 */
 	clk_prepare_enable(gpucc_xo.clkr.hw.clk);
 
-	dev_info(&pdev->dev, "Registered early GPUCC clocks\n");
+	dev_info(&pdev->dev, "Registered GPUCC clocks\n");
 	return 0;
 }
 
-static const struct of_device_id gpucc_early_msm8998_match_table[] = {
-	{ .compatible = "qcom,gpucc-early-msm8998" },
+static const struct of_device_id gpucc_msm8998_match_table[] = {
+	{ .compatible = "qcom,gpucc-msm8998" },
 	{},
 };
 
-static struct platform_driver gpucc_early_msm8998_driver = {
-	.probe = gpucc_early_msm8998_probe,
+static struct platform_driver gpucc_msm8998_driver = {
+	.probe = gpucc_msm8998_probe,
 	.driver = {
-		.name = "qcom,gpucc-early-msm8998",
-		.of_match_table = gpucc_early_msm8998_match_table,
+		.name = "qcom,gpucc-msm8998",
+		.of_match_table = gpucc_msm8998_match_table,
 		.owner = THIS_MODULE,
 	},
 };
 
-int __init gpucc_early_msm8998_init(void)
+int __init gpucc_msm8998_init(void)
 {
-	return platform_driver_register(&gpucc_early_msm8998_driver);
+	return platform_driver_register(&gpucc_msm8998_driver);
 }
-arch_initcall(gpucc_early_msm8998_init);
+arch_initcall(gpucc_msm8998_init);
