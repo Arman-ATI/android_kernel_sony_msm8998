@@ -5,6 +5,7 @@
  */
 #include <linux/delay.h>
 #include <linux/input.h>
+#include <linux/math64.h>
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
@@ -3810,10 +3811,12 @@ void adreno_device_private_destroy(struct kgsl_device_private *dev_priv)
 	kfree(adreno_priv);
 }
 
-static inline s64 adreno_ticks_to_us(u32 ticks, u32 freq)
+static inline u64 adreno_ticks_to_us(u64 ticks, u32 freq)
 {
-	freq /= 1000000;
-	return ticks / freq;
+	if (unlikely(!freq))
+		return 0;
+
+	return mul_u64_u32_div(ticks, 1000000, freq);
 }
 
 /**
