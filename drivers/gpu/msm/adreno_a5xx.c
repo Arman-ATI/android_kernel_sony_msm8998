@@ -1333,7 +1333,7 @@ static int64_t a5xx_read_throttling_counters(struct adreno_device *adreno_dev)
 				adreno_dev->gpmu_throttle_counters[i],
 				&busy->throttle_cycles[i]);
 	}
-	adj = th[CRC_MORE50PCT] - th[IDLE_10PCT];
+	adj = (int64_t)th[CRC_MORE50PCT] - (int64_t)th[IDLE_10PCT];
 	adj = th[CRC_50PCT] + th[CRC_LESS50PCT] / 3 + (adj < 0 ? 0 : adj) * 3;
 
 	trace_kgsl_clock_throttling(
