@@ -495,11 +495,11 @@
 	};
 };
 &clock_gcc {
-	compatible = "qcom,gcc-msm8998-v2";
+	compatible = "qcom,gcc-msm8998-v2", "syscon";
 };
 
 &clock_mmss {
-	compatible = "qcom,mmcc-msm8998-v2";
+	compatible = "qcom,mmcc-msm8998-v2", "syscon";
 };
 
 &mdss_mdp {
