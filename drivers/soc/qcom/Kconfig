@@ -997,4 +997,15 @@ config QPNP_HAPTIC
 	  module provides haptic feedback for user actions such as a long press
 	  on the touch screen.  It uses the Android timed-output framework.
 
+config VENDOR_SCHED_SHIM
+	bool "Compatibility front end for the Pixel /proc/vendor_sched interface"
+	depends on CGROUP_SCHED && UCLAMP_TASK_GROUP
+	help
+	  Provides the subset of the Pixel /proc/vendor_sched node set that
+	  Pixel configuration writes, translating each write into a write on
+	  the existing cpu cgroup files. Use this to run Pixel power and task
+	  configuration unchanged on a kernel without the vendor_sched module.
+
+	  If unsure, say N.
+
 source "drivers/soc/qcom/wcnss/Kconfig"
