@@ -896,6 +896,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 		      max(delta_exec, curr->statistics.exec_max));
 
 	curr->sum_exec_runtime += delta_exec;
+	curr->delta_exec += delta_exec;
 	schedstat_add(cfs_rq->exec_clock, delta_exec);
 
 	curr->vruntime += calc_delta_fair(delta_exec, curr);
@@ -3852,11 +3853,28 @@ util_est_dequeue(struct cfs_rq *cfs_rq, struct task_struct *p, bool task_sleep)
 	trace_sched_util_est_cpu(cpu_of(rq_of(cfs_rq)), cfs_rq);
 
 	/*
-	 * Skip update of task's estimated utilization when the task has not
-	 * yet completed an activation, e.g. being migrated.
+	 * If the task is still running, update its estimated utilization
+	 * ignoring utilization invariance, so a task that suddenly gets busier
+	 * settles on its new util_avg faster. util_est must still behave the
+	 * same at enqueue and dequeue.
 	 */
-	if (!task_sleep)
+	if (!task_sleep) {
+		u64 delta = p->se.delta_exec;
+		unsigned int prev_ewma;
+
+		ue = p->se.avg.util_est;
+		prev_ewma = ue.ewma;
+
+		do_div(delta, 1000);
+		ue.ewma = approximate_util_avg(prev_ewma, delta);
+		if (ue.ewma != prev_ewma)
+			p->se.delta_exec = 0;
+
+		WRITE_ONCE(p->se.avg.util_est, ue);
 		return;
+	}
+
+	p->se.delta_exec = 0;
 
 	/*
 	 * If the PELT values haven't changed since enqueue time,
@@ -3919,6 +3937,13 @@ done:
 
 	/* Update plots for Task's estimated utilization */
 	trace_sched_util_est_task(p, &p->se.avg);
+}
+
+static inline void util_est_update_running(struct cfs_rq *cfs_rq,
+					   struct task_struct *p)
+{
+	util_est_dequeue(cfs_rq, p, false);
+	util_est_enqueue(cfs_rq, p);
 }
 
 static inline bool
@@ -8382,6 +8407,9 @@ done: __maybe_unused;
 
 	update_misfit_status(p, rq);
 
+	if (prev->on_rq)
+		util_est_update_running(&rq->cfs, prev);
+
 	return p;
 
 idle:
@@ -12108,6 +12136,8 @@ static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 		cfs_rq = cfs_rq_of(se);
 		entity_tick(cfs_rq, se, queued);
 	}
+
+	util_est_update_running(&rq->cfs, curr);
 
 	if (static_branch_unlikely(&sched_numa_balancing))
 		task_tick_numa(rq, curr);
