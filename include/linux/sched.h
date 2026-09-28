@@ -884,9 +884,11 @@ struct task_struct {
 
 	/*
 	 * Per task util_est rampup multiplier: 1 leaves util_est as is, higher
-	 * values scale the running rampup and slow the decay.
+	 * values scale the running rampup and slow the decay. When the set
+	 * flag is clear the task follows the global default.
 	 */
 	unsigned int			rampup_multiplier;
+	unsigned int			rampup_multiplier_set;
 
 #ifdef CONFIG_SCHED_WALT
 	struct ravg ravg;
