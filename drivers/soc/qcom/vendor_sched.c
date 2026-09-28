@@ -31,6 +31,7 @@
 #define VS_MAX_VALUE		32
 #define VS_MAX_NAME		64
 #define VS_MAX_PATH		128
+#define VS_RAMPUP_MAX		16
 
 /*
  * cpu.uclamp.min and cpu.uclamp.max take a percentage in fixed point with
@@ -83,6 +84,7 @@ enum vs_kind {
 	VS_FORK_RESET_CLEAR,
 	VS_TGID_TYPE,
 	VS_RAMPUP_SET,
+	VS_RAMPUP_CLEAR,
 };
 
 /* One node: a name format for the per group nodes, a literal one otherwise. */
@@ -215,6 +217,66 @@ static int vs_fork_reset(char *buf)
 	return task ? 0 : -ESRCH;
 }
 
+/*
+ * A rampup set write is "<tid>:<multiplier>", as Pixel's power HAL writes it,
+ * and it applies to that one task. Values above VS_RAMPUP_MAX are rejected;
+ * the EWMA shift they select must stay far from overflow.
+ */
+static int vs_rampup_set(char *buf)
+{
+	struct task_struct *task;
+	unsigned long multiplier, pid;
+	char *str = strim(buf);
+	char *sep = strchr(str, ':');
+	char saved;
+
+	if (!sep)
+		return -EINVAL;
+
+	saved = *sep;
+	*sep = '\0';
+
+	if (kstrtoul(str, 10, &pid) || !pid)
+		goto err;
+	if (kstrtoul(strim(sep + 1), 10, &multiplier) ||
+	    multiplier > VS_RAMPUP_MAX)
+		goto err;
+
+	*sep = saved;
+
+	task = find_get_task_by_vpid((pid_t)pid);
+	if (!task)
+		return -ESRCH;
+
+	WRITE_ONCE(task->rampup_multiplier, (unsigned int)multiplier);
+	put_task_struct(task);
+
+	return 0;
+
+err:
+	*sep = saved;
+	return -EINVAL;
+}
+
+/* A rampup clear write is a bare tid and restores the default multiplier. */
+static int vs_rampup_clear(char *buf)
+{
+	struct task_struct *task;
+	unsigned long pid;
+
+	if (kstrtoul(strim(buf), 10, &pid) || !pid)
+		return -EINVAL;
+
+	task = find_get_task_by_vpid((pid_t)pid);
+	if (!task)
+		return -ESRCH;
+
+	WRITE_ONCE(task->rampup_multiplier, 1);
+	put_task_struct(task);
+
+	return 0;
+}
+
 /* The percentage equivalent at the cgroup file's own resolution. */
 static void vs_uclamp_percent(unsigned long util, char *out, size_t len)
 {
@@ -321,9 +383,19 @@ static int vs_node_apply(struct vs_node *node, char *buf, char *value,
 		ret = 0;
 		break;
 	case VS_RAMPUP_SET:
-		/* Accepted and dropped: no rampup machinery here. */
+		ret = vs_rampup_set(buf);
+		if (ret < 0)
+			return ret;
+
+		/* The node reports the tid:value pair it was given. */
 		stored = buf;
-		ret = 0;
+		break;
+	case VS_RAMPUP_CLEAR:
+		ret = vs_rampup_clear(buf);
+		if (ret < 0)
+			return ret;
+
+		stored = buf;
 		break;
 	default:
 		return -EINVAL;
@@ -468,6 +540,7 @@ static const struct vs_desc vs_global_nodes[] = {
 /* Nodes the power HAL opens directly, outside powerhint.json. */
 static const struct vs_desc vs_sched_qos_nodes[] = {
 	{ "rampup_multiplier_set",	VS_RAMPUP_SET },
+	{ "rampup_multiplier_clear",	VS_RAMPUP_CLEAR },
 };
 
 static void vs_add_nodes(struct proc_dir_entry *parent,
