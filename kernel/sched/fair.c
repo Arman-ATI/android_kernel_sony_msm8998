@@ -3780,6 +3780,11 @@ static inline unsigned long _task_util_est(struct task_struct *p)
 	return max(ue.ewma, ue.enqueued);
 }
 
+static inline unsigned long task_util_dequeued(struct task_struct *p)
+{
+	return READ_ONCE(p->util_avg_dequeued);
+}
+
 unsigned long task_util_est(struct task_struct *p)
 {
 #ifdef CONFIG_SCHED_WALT
@@ -3862,6 +3867,16 @@ util_est_dequeue(struct cfs_rq *cfs_rq, struct task_struct *p, bool task_sleep)
 		u64 delta = p->se.delta_exec;
 		unsigned int prev_ewma;
 
+		/*
+		 * Only a task moving to a higher periodic state should ramp up
+		 * faster. A steady periodic task is already described accurately
+		 * by util_avg and must keep its power savings.
+		 */
+		if (task_util(p) <= task_util_dequeued(p) ||
+		    task_util(p) - task_util_dequeued(p) <=
+				SCHED_CAPACITY_SCALE / 100)
+			return;
+
 		ue = p->se.avg.util_est;
 		prev_ewma = ue.ewma;
 
@@ -3884,6 +3899,12 @@ util_est_dequeue(struct cfs_rq *cfs_rq, struct task_struct *p, bool task_sleep)
 	ue = p->se.avg.util_est;
 	if (ue.enqueued & UTIL_AVG_UNCHANGED)
 		return;
+
+	/*
+	 * Record the utilization at dequeue so the running update can tell a
+	 * task transitioning to a higher periodic state from a steady one.
+	 */
+	p->util_avg_dequeued = task_util(p);
 
 	/*
 	 * Reset EWMA on utilization increases, the moving average is used only
