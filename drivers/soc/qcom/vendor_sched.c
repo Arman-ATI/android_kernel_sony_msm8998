@@ -19,6 +19,7 @@
 #include <linux/mutex.h>
 #include <linux/proc_fs.h>
 #include <linux/sched.h>
+#include <linux/sched/sysctl.h>
 #include <linux/sched/task.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
@@ -249,6 +250,7 @@ static int vs_rampup_set(char *buf)
 		return -ESRCH;
 
 	WRITE_ONCE(task->rampup_multiplier, (unsigned int)multiplier);
+	WRITE_ONCE(task->rampup_multiplier_set, 1);
 	put_task_struct(task);
 
 	return 0;
@@ -271,7 +273,8 @@ static int vs_rampup_clear(char *buf)
 	if (!task)
 		return -ESRCH;
 
-	WRITE_ONCE(task->rampup_multiplier, 1);
+	WRITE_ONCE(task->rampup_multiplier, sysctl_sched_rampup_multiplier);
+	WRITE_ONCE(task->rampup_multiplier_set, 0);
 	put_task_struct(task);
 
 	return 0;
