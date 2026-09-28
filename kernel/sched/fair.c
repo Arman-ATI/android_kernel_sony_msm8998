@@ -3858,6 +3858,17 @@ util_est_dequeue(struct cfs_rq *cfs_rq, struct task_struct *p, bool task_sleep)
 	trace_sched_util_est_cpu(cpu_of(rq_of(cfs_rq)), cfs_rq);
 
 	/*
+	 * A multiplier of 0 says the task does not need util_est; drop the
+	 * estimate so it follows the PELT signal exactly.
+	 */
+	if (sched_feat(UTIL_EST_RAMPUP_ZERO) && !p->rampup_multiplier) {
+		ue = p->se.avg.util_est;
+		ue.ewma = 0;
+		WRITE_ONCE(p->se.avg.util_est, ue);
+		return;
+	}
+
+	/*
 	 * If the task is still running, update its estimated utilization
 	 * ignoring utilization invariance, so a task that suddenly gets busier
 	 * settles on its new util_avg faster. util_est must still behave the
