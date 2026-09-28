@@ -881,6 +881,13 @@ struct task_struct {
 	int				boost;
 	u64				boost_period;
 	u64				boost_expires;
+
+	/*
+	 * Per task util_est rampup multiplier: 1 leaves util_est as is, higher
+	 * values scale the running rampup and slow the decay.
+	 */
+	unsigned int			rampup_multiplier;
+
 #ifdef CONFIG_SCHED_WALT
 	struct ravg ravg;
 	/*

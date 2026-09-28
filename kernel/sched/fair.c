@@ -3866,6 +3866,7 @@ util_est_dequeue(struct cfs_rq *cfs_rq, struct task_struct *p, bool task_sleep)
 		prev_ewma = ue.ewma;
 
 		do_div(delta, 1000);
+		delta *= p->rampup_multiplier;
 		ue.ewma = approximate_util_avg(prev_ewma, delta);
 		if (ue.ewma != prev_ewma)
 			p->se.delta_exec = 0;
@@ -3929,6 +3930,9 @@ util_est_dequeue(struct cfs_rq *cfs_rq, struct task_struct *p, bool task_sleep)
 	 * Where 'w' is the weight of new samples, which is configured to be
 	 * 0.25, thus making w=1/4 ( >>= UTIL_EST_WEIGHT_SHIFT)
 	 */
+	if (p->rampup_multiplier)
+		last_ewma_diff /= p->rampup_multiplier;
+
 	ue.ewma <<= UTIL_EST_WEIGHT_SHIFT;
 	ue.ewma  += last_ewma_diff;
 	ue.ewma >>= UTIL_EST_WEIGHT_SHIFT;
