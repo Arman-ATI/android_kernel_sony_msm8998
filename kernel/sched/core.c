@@ -1477,7 +1477,18 @@ bool uclamp_latency_sensitive(struct task_struct *p)
 		return false;
 	tg = container_of(css, struct task_group, css);
 
-	return tg->latency_sensitive;
+	if (!tg->latency_sensitive)
+		return false;
+
+	/*
+	 * The group vote is a placement hint, not a blanket one. Applying it
+	 * at every priority over-applies it: a low-priority task with a
+	 * restricted uclamp.max gains nothing from an idle-CPU bias, so keep
+	 * the group vote only for default-and-higher priority tasks whose max
+	 * is unrestricted, as Pixel does.
+	 */
+	return p->prio <= DEFAULT_PRIO &&
+	       uclamp_eff_value(p, UCLAMP_MAX) == SCHED_CAPACITY_SCALE;
 #else
 	return false;
 #endif
