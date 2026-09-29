@@ -6979,7 +6979,7 @@ static unsigned long cpu_util_without(int cpu, struct task_struct *p)
  */
 unsigned long capacity_curr_of(int cpu)
 {
-	unsigned long max_cap = cpu_rq(cpu)->cpu_capacity_orig;
+	unsigned long max_cap = capacity_orig_now(cpu);
 	unsigned long scale_freq = arch_scale_freq_capacity(cpu);
 
 	return cap_scale(max_cap, scale_freq);
