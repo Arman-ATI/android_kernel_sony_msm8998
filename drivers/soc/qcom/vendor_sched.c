@@ -11,7 +11,9 @@
  * Copyright (c) 2026, Edrick Sinsuan <evcsinsuan@gmail.com>
  */
 
+#include <linux/capability.h>
 #include <linux/cgroup.h>
+#include <linux/cred.h>
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -24,6 +26,7 @@
 #include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/string.h>
+#include <linux/uidgid.h>
 #include <linux/uaccess.h>
 
 #define VS_CPUCTL_ROOT		"/dev/cpuctl"
@@ -69,9 +72,9 @@ static const struct vs_group {
 	{ "rt",		"rt" },
 	{ "dex2oat",	"dex2oat" },
 	{ "sf",		"foreground" },
-	{ "cam",	"foreground" },
+	{ "cam",	"camera-daemon" },
 	{ "cam_power",	"foreground" },
-	{ "nnapi",	"foreground" },
+	{ "nnapi",	"nnapi-hal" },
 	{ "ota",	"background" },
 };
 
@@ -114,6 +117,9 @@ static struct proc_dir_entry *vs_root;
  */
 #define VS_TAG_SYSTEM_UI	1
 #define VS_TAG_CHROME		2
+
+/* The default answer must not collide with the SYSTEM_UI/CHROME tags. */
+#define VS_TAG_NONE		0
 
 static int vs_tgid_tag(unsigned long tgid, int fallback)
 {
@@ -159,6 +165,26 @@ static int vs_write_file(const char *path, const char *buf, size_t count)
 	return (int)count;
 }
 
+/*
+ * Reject writes targeting another task unless the caller is root, shares the
+ * target's euid/suid, or holds CAP_SYS_NICE in its user namespace. The power
+ * HAL runs as root, so this is behaviour-neutral for it.
+ */
+static int vs_check_cred(struct task_struct *p)
+{
+	const struct cred *cred = current_cred();
+	const struct cred *tcred = get_task_cred(p);
+	bool allowed;
+
+	allowed = uid_eq(cred->euid, GLOBAL_ROOT_UID) ||
+		  uid_eq(cred->euid, tcred->uid) ||
+		  uid_eq(cred->euid, tcred->suid) ||
+		  ns_capable(tcred->user_ns, CAP_SYS_NICE);
+	put_cred(tcred);
+
+	return allowed ? 0 : -EACCES;
+}
+
 static int vs_write_attr(int group, const char *attr, const char *buf,
 			 size_t count)
 {
@@ -170,8 +196,9 @@ static int vs_write_attr(int group, const char *attr, const char *buf,
 	return vs_write_file(path, buf, count);
 }
 
-static int vs_write_pid(const char *file, char *buf)
+static int vs_write_pid(int group, const char *file, char *buf)
 {
+	struct task_struct *task;
 	char path[VS_MAX_PATH];
 	char pid[VS_MAX_VALUE];
 	unsigned long val;
@@ -181,8 +208,18 @@ static int vs_write_pid(const char *file, char *buf)
 	if (ret || !val)
 		return -EINVAL;
 
+	task = find_get_task_by_vpid((pid_t)val);
+	if (!task)
+		return -ESRCH;
+
+	ret = vs_check_cred(task);
+	put_task_struct(task);
+	if (ret)
+		return ret;
+
 	snprintf(pid, sizeof(pid), "%lu", val);
-	snprintf(path, sizeof(path), "%s/%s", VS_CPUCTL_ROOT, file);
+	snprintf(path, sizeof(path), "%s/%s/%s", VS_CPUCTL_ROOT,
+		 vs_groups[group].cpuctl, file);
 
 	return vs_write_file(path, pid, strlen(pid));
 }
@@ -205,17 +242,21 @@ static int vs_uclamp_value(char *buf, unsigned long *value)
 /* A fork reset write takes a pid: -EINVAL if malformed, -ESRCH if unknown. */
 static int vs_fork_reset(char *buf)
 {
-	unsigned long pid;
 	struct task_struct *task;
+	unsigned long pid;
+	int ret;
 
 	if (kstrtoul(strim(buf), 0, &pid) || !pid)
 		return -EINVAL;
 
-	rcu_read_lock();
-	task = find_task_by_vpid((pid_t)pid);
-	rcu_read_unlock();
+	task = find_get_task_by_vpid((pid_t)pid);
+	if (!task)
+		return -ESRCH;
 
-	return task ? 0 : -ESRCH;
+	ret = vs_check_cred(task);
+	put_task_struct(task);
+
+	return ret;
 }
 
 /*
@@ -369,11 +410,11 @@ static int vs_node_apply(struct vs_node *node, char *buf, char *value,
 	}
 	case VS_SET_TASKS:
 		stored = buf;
-		ret = vs_write_pid("tasks", buf);
+		ret = vs_write_pid(node->group, "tasks", buf);
 		break;
 	case VS_SET_PROCS:
 		stored = buf;
-		ret = vs_write_pid("cgroup.procs", buf);
+		ret = vs_write_pid(node->group, "cgroup.procs", buf);
 		break;
 	case VS_FORK_RESET_SET:
 	case VS_FORK_RESET_CLEAR:
@@ -454,7 +495,7 @@ static ssize_t vs_node_write(struct file *file, const char __user *ubuf,
 		if (kstrtoul(strim(buf), 10, &tgid))
 			return -EINVAL;
 
-		return vs_tgid_tag(tgid, count);
+		return vs_tgid_tag(tgid, VS_TAG_NONE);
 	}
 
 	ret = vs_node_apply(node, buf, value, sizeof(value));
