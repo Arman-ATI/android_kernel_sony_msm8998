@@ -949,6 +949,27 @@ uclamp_tg_restrict(struct task_struct *p, enum uclamp_id clamp_id)
 	tg_max = task_group(p)->uclamp[UCLAMP_MAX].value;
 	value = uc_req.value;
 	value = clamp(value, tg_min, tg_max);
+
+	/*
+	 * A per-task uclamp.min at or below its group floor is only useful as
+	 * a placement-importance marker. Nudge it one capacity unit above the
+	 * floor so it still ranks above a task without such a request; the
+	 * frequency effect is at most one bucket.
+	 */
+	if (clamp_id == UCLAMP_MIN && uc_req.user_defined &&
+	    uc_req.value <= tg_min && value < SCHED_CAPACITY_SCALE)
+		value++;
+
+	/*
+	 * A low-priority task's uclamp.max is one bucket short of the ceiling
+	 * so it ranks below a default-priority task of equal utilization. It
+	 * does not change the frequency choice.
+	 */
+	if (clamp_id == UCLAMP_MAX && p->prio > DEFAULT_PRIO)
+		value = min_t(unsigned int,
+			      UCLAMP_BUCKET_DELTA * (UCLAMP_BUCKETS - 1) - 1,
+			      value);
+
 	uclamp_se_set(&uc_req, value, false);
 #endif
 
