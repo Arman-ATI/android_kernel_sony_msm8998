@@ -4012,13 +4012,31 @@ static inline void util_est_update_running(struct cfs_rq *cfs_rq,
 	util_est_enqueue(cfs_rq, p);
 }
 
+/*
+ * cpu_capacity_orig is only renewed when the sched domain capacities are
+ * updated, so a thermal or frequency limit that moves asynchronously stays
+ * invisible to placement until the next update. Recompute the capacity from
+ * the current scales where a decision must not act on that stale value. WALT
+ * tracks its own thermal cap and group thresholds, so it keeps the stored
+ * value.
+ */
+static inline unsigned long capacity_orig_now(int cpu)
+{
+#ifdef CONFIG_SCHED_WALT
+	return capacity_orig_of(cpu);
+#else
+	return (arch_scale_cpu_capacity(NULL, cpu) *
+		topology_get_max_freq_scale(NULL, cpu)) >> SCHED_CAPACITY_SHIFT;
+#endif
+}
+
 static inline bool
 bias_to_this_cpu(struct task_struct *p, int cpu, int start_cpu)
 {
 	bool base_test = cpumask_test_cpu(cpu, &p->cpus_allowed) &&
 			cpu_active(cpu);
-	bool start_cap_test = (capacity_orig_of(cpu) >=
-					capacity_orig_of(start_cpu));
+	bool start_cap_test = (capacity_orig_now(cpu) >=
+					capacity_orig_now(start_cpu));
 
 	return base_test && start_cap_test;
 }
@@ -4033,7 +4051,7 @@ static inline bool task_fits_capacity(struct task_struct *p,
 	 * Derive upmigration/downmigrate margin wrt the src/dest
 	 * CPU.
 	 */
-	if (capacity_orig_of(task_cpu(p)) > capacity_orig_of(cpu))
+	if (capacity_orig_now(task_cpu(p)) > capacity_orig_now(cpu))
 		margin = sched_capacity_margin_down[cpu];
 	else
 		margin = sched_capacity_margin_up[task_cpu(p)];
@@ -4043,7 +4061,7 @@ static inline bool task_fits_capacity(struct task_struct *p,
 
 static inline bool task_fits_max(struct task_struct *p, int cpu)
 {
-	unsigned long capacity = capacity_orig_of(cpu);
+	unsigned long capacity = capacity_orig_now(cpu);
 	unsigned long max_capacity = cpu_rq(cpu)->rd->max_cpu_capacity.val;
 	unsigned long task_boost = per_task_boost(p);
 
@@ -4066,7 +4084,7 @@ static inline bool task_fits_max(struct task_struct *p, int cpu)
 
 static inline bool task_demand_fits(struct task_struct *p, int cpu)
 {
-	unsigned long capacity = capacity_orig_of(cpu);
+	unsigned long capacity = capacity_orig_now(cpu);
 	unsigned long max_capacity = cpu_rq(cpu)->rd->max_cpu_capacity.val;
 
 	if (capacity == max_capacity)
@@ -5562,7 +5580,7 @@ static unsigned long capacity_of(int cpu);
 
 bool __cpu_overutilized(int cpu, int delta)
 {
-	return (capacity_orig_of(cpu) * 1024) <
+	return (capacity_orig_now(cpu) * 1024) <
 		((cpu_util(cpu) + delta) * sched_capacity_margin_up[cpu]);
 }
 
@@ -7114,7 +7132,7 @@ static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 		goto out;
 
 	/* fast path for prev_cpu */
-	if (((capacity_orig_of(prev_cpu) == capacity_orig_of(start_cpu)) ||
+	if (((capacity_orig_now(prev_cpu) == capacity_orig_now(start_cpu)) ||
 		asym_cap_siblings(prev_cpu, start_cpu)) &&
 		!cpu_isolated(prev_cpu) && cpu_online(prev_cpu) &&
 		idle_cpu(prev_cpu)) {
@@ -7132,7 +7150,7 @@ static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 	do {
 		for_each_cpu_and(i, &p->cpus_allowed, sched_group_span(sg)) {
 			unsigned long capacity_curr = capacity_curr_of(i);
-			unsigned long capacity_orig = capacity_orig_of(i);
+			unsigned long capacity_orig = capacity_orig_now(i);
 			unsigned long wake_util, new_util, new_util_cuml;
 			long spare_cap;
 			int idle_idx = INT_MAX;
@@ -7312,7 +7330,7 @@ static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 			 * Skip processing placement further if we are visiting
 			 * cpus with lower capacity than start cpu
 			 */
-			if (capacity_orig < capacity_orig_of(start_cpu))
+			if (capacity_orig < capacity_orig_now(start_cpu))
 				continue;
 
 			/*
@@ -7417,8 +7435,8 @@ static void find_best_target(struct sched_domain *sd, cpumask_t *cpus,
 			target_cpu = i;
 		}
 
-		next_group_higher_cap = (capacity_orig_of(group_first_cpu(sg)) <
-			capacity_orig_of(group_first_cpu(sg->next)));
+		next_group_higher_cap = (capacity_orig_now(group_first_cpu(sg)) <
+			capacity_orig_now(group_first_cpu(sg->next)));
 
 		if (p->in_iowait && !next_group_higher_cap &&
 				most_spare_cap_cpu != -1)
@@ -7540,7 +7558,7 @@ static int wake_cap(struct task_struct *p, int cpu, int prev_cpu)
 	if (!static_branch_unlikely(&sched_asym_cpucapacity))
 		return 0;
 
-	min_cap = min(capacity_orig_of(prev_cpu), capacity_orig_of(cpu));
+	min_cap = min(capacity_orig_now(prev_cpu), capacity_orig_now(cpu));
 	max_cap = cpu_rq(cpu)->rd->max_cpu_capacity.val;
 
 	/* Minimum capacity is close to max, no need to abort wake_affine */
@@ -7759,7 +7777,7 @@ static void select_cpu_candidates(struct sched_domain *sd, cpumask_t *cpus,
 				continue;
 
 			if (idle_cpu(cpu)) {
-				cpu_cap = capacity_orig_of(cpu);
+				cpu_cap = capacity_orig_now(cpu);
 				if (boosted && cpu_cap < target_cap)
 					continue;
 				if (!boosted && cpu_cap > target_cap)
@@ -11456,7 +11474,7 @@ static inline int find_energy_aware_new_ilb(void)
 	int cpu = raw_smp_processor_id();
 	cpumask_t idle_cpus, tmp_cpus;
 	struct sched_group *sg;
-	unsigned long ref_cap = capacity_orig_of(cpu);
+	unsigned long ref_cap = capacity_orig_now(cpu);
 	unsigned long best_cap = 0, best_cap_cpu = -1;
 
 	rcu_read_lock();
@@ -11480,7 +11498,7 @@ static inline int find_energy_aware_new_ilb(void)
 		if (i >= nr_cpu_ids)
 			continue;
 
-		cap = capacity_orig_of(i);
+		cap = capacity_orig_now(i);
 
 		/* The first preference is for the same capacity CPU */
 		if (cap == ref_cap) {
@@ -13143,7 +13161,7 @@ void check_for_migration(struct rq *rq, struct task_struct *p)
 		new_cpu = find_energy_efficient_cpu(p, prev_cpu, 0, 1);
 		rcu_read_unlock();
 		if ((new_cpu != -1) && (new_cpu != prev_cpu) &&
-		    (capacity_orig_of(new_cpu) > capacity_orig_of(prev_cpu))) {
+		    (capacity_orig_now(new_cpu) > capacity_orig_now(prev_cpu))) {
 			active_balance = kick_active_balance(rq, p, new_cpu);
 			if (active_balance) {
 				mark_reserved(new_cpu);
