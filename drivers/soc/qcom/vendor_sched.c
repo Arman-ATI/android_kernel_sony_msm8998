@@ -276,6 +276,7 @@ static int vs_rampup_set(char *buf)
 	char *str = strim(buf);
 	char *sep = strchr(str, ':');
 	char saved;
+	int ret;
 
 	if (!sep)
 		return -EINVAL;
@@ -295,6 +296,12 @@ static int vs_rampup_set(char *buf)
 	if (!task)
 		return -ESRCH;
 
+	ret = vs_check_cred(task);
+	if (ret) {
+		put_task_struct(task);
+		return ret;
+	}
+
 	WRITE_ONCE(task->rampup_multiplier, (unsigned int)multiplier);
 	WRITE_ONCE(task->rampup_multiplier_set, 1);
 	put_task_struct(task);
@@ -311,6 +318,7 @@ static int vs_rampup_clear(char *buf)
 {
 	struct task_struct *task;
 	unsigned long pid;
+	int ret;
 
 	if (kstrtoul(strim(buf), 10, &pid) || !pid)
 		return -EINVAL;
@@ -318,6 +326,12 @@ static int vs_rampup_clear(char *buf)
 	task = find_get_task_by_vpid((pid_t)pid);
 	if (!task)
 		return -ESRCH;
+
+	ret = vs_check_cred(task);
+	if (ret) {
+		put_task_struct(task);
+		return ret;
+	}
 
 	WRITE_ONCE(task->rampup_multiplier, sysctl_sched_rampup_multiplier);
 	WRITE_ONCE(task->rampup_multiplier_set, 0);
