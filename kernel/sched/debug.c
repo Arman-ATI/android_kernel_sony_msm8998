@@ -1006,6 +1006,8 @@ void proc_sched_show_task(struct task_struct *p, struct pid_namespace *ns,
 #endif
 	P(policy);
 	P(prio);
+	P(sched_qos_set);
+	P(rampup_multiplier);
 	if (p->policy == SCHED_DEADLINE) {
 		P(dl.runtime);
 		P(dl.deadline);

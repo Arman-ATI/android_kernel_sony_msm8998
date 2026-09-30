@@ -2685,6 +2685,11 @@ static inline bool uclamp_is_used(void)
 unsigned long task_util_est(struct task_struct *p);
 unsigned int uclamp_task(struct task_struct *p);
 bool uclamp_latency_sensitive(struct task_struct *p);
+
+static inline bool sched_qos_member(const struct task_struct *p)
+{
+	return READ_ONCE(p->sched_qos_set) == SCHED_QOS_MEMBER;
+}
 bool uclamp_boosted(struct task_struct *p);
 
 #ifdef arch_scale_freq_capacity

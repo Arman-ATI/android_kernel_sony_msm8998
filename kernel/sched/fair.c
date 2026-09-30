@@ -3839,13 +3839,16 @@ static inline bool within_margin(int value, int margin)
 }
 
 /*
- * The multiplier is taken exactly as stored: a task carries the global default
- * until the power HAL writes a per-task value, and only the HAL raises it above
- * that, so the stored value needs no gate here. 0 and 1 keep their global
- * meaning: 0 disables util_est for every task and 1 is the normal behavior.
+ * The rampup is honoured only for a SCHED_QOS member: if QOS was never set the
+ * HAL's value is not used at all, and once QOS is cleared there is no way for a
+ * stale value to be retained in use. 0 and 1 keep their global meaning: 0
+ * disables util_est for every task and 1 is the normal behavior.
  */
 static unsigned int task_rampup_multiplier(struct task_struct *p)
 {
+	if (READ_ONCE(p->rampup_multiplier_set) && !sched_qos_member(p))
+		return READ_ONCE(sysctl_sched_rampup_multiplier);
+
 	return READ_ONCE(p->rampup_multiplier);
 }
 
@@ -3882,7 +3885,7 @@ static inline void util_est_update(struct cfs_rq *cfs_rq,
 	 * A multiplier of 0 says the task does not need util_est; drop the
 	 * estimate so it follows the PELT signal exactly.
 	 */
-	if (sched_feat(UTIL_EST_RAMPUP_ZERO) && !p->rampup_multiplier) {
+	if (sched_feat(UTIL_EST_RAMPUP_ZERO) && !task_rampup_multiplier(p)) {
 		ue = p->se.avg.util_est;
 		ue.ewma = 0;
 		WRITE_ONCE(p->se.avg.util_est, ue);

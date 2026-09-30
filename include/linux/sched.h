@@ -830,6 +830,14 @@ struct wake_q_node {
 	struct wake_q_node *next;
 };
 
+/*
+ * Per-task SCHED_QOS registration: an explicit member, or not.
+ */
+enum sched_qos_state {
+	SCHED_QOS_NONE		= 0,
+	SCHED_QOS_MEMBER	= 1,
+};
+
 struct task_struct {
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 	/*
@@ -897,6 +905,13 @@ struct task_struct {
 	 */
 	unsigned int			rampup_multiplier;
 	unsigned int			rampup_multiplier_set;
+
+	/*
+	 * Per-task SCHED_QOS marker: the entitlement for both the util_est
+	 * rampup multiplier and the prefer-idle latency bias. An explicit
+	 * registration, so a task never registered is not a member.
+	 */
+	unsigned int			sched_qos_set;
 
 #ifdef CONFIG_SCHED_WALT
 	struct ravg ravg;
