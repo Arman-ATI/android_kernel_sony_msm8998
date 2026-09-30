@@ -32,7 +32,7 @@
 #define VS_CPUCTL_ROOT		"/dev/cpuctl"
 #define VS_PROC_DIR		"vendor_sched"
 #define VS_SCHED_QOS_DIR	"sched_qos"
-#define VS_MAX_VALUE		32
+#define VS_MAX_VALUE		48
 #define VS_MAX_NAME		64
 #define VS_MAX_PATH		128
 #define VS_RAMPUP_MAX		16
@@ -525,10 +525,12 @@ static int vs_node_apply(struct vs_node *node, char *buf, char *value,
 		if (!task)
 			return -ESRCH;
 
-		snprintf(state, sizeof(state), "qos=%u set=%u mult=%u",
+		snprintf(state, sizeof(state),
+			 "qos=%u set=%u mult=%u effective=%u",
 			 READ_ONCE(task->sched_qos_set),
 			 READ_ONCE(task->rampup_multiplier_set),
-			 READ_ONCE(task->rampup_multiplier));
+			 READ_ONCE(task->rampup_multiplier),
+			 task_rampup_multiplier(task));
 		put_task_struct(task);
 
 		stored = state;

@@ -3205,6 +3205,20 @@ static inline int per_task_boost(struct task_struct *p)
 	return p->boost;
 }
 
+/*
+ * Effective util_est rampup multiplier for a task: the power HAL's per-task
+ * value while the task is a SCHED_QOS member, the global default otherwise.
+ * Defined outside the CONFIG_SMP block so the vendor shim can report it; the
+ * predicate stays here, in one place.
+ */
+unsigned int task_rampup_multiplier(struct task_struct *p)
+{
+	if (READ_ONCE(p->rampup_multiplier_set) && !sched_qos_member(p))
+		return READ_ONCE(sysctl_sched_rampup_multiplier);
+
+	return READ_ONCE(p->rampup_multiplier);
+}
+
 #ifdef CONFIG_SMP
 #ifdef CONFIG_FAIR_GROUP_SCHED
 /**
@@ -3836,20 +3850,6 @@ static inline void util_est_enqueue(struct cfs_rq *cfs_rq,
 static inline bool within_margin(int value, int margin)
 {
 	return ((unsigned int)(value + margin - 1) < (2 * margin - 1));
-}
-
-/*
- * The rampup is honoured only for a SCHED_QOS member: if QOS was never set the
- * HAL's value is not used at all, and once QOS is cleared there is no way for a
- * stale value to be retained in use. 0 and 1 keep their global meaning: 0
- * disables util_est for every task and 1 is the normal behavior.
- */
-static unsigned int task_rampup_multiplier(struct task_struct *p)
-{
-	if (READ_ONCE(p->rampup_multiplier_set) && !sched_qos_member(p))
-		return READ_ONCE(sysctl_sched_rampup_multiplier);
-
-	return READ_ONCE(p->rampup_multiplier);
 }
 
 static inline void util_est_dequeue(struct cfs_rq *cfs_rq,

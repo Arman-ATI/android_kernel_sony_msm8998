@@ -838,6 +838,9 @@ enum sched_qos_state {
 	SCHED_QOS_MEMBER	= 1,
 };
 
+/* Effective util_est rampup multiplier; defined in kernel/sched/fair.c. */
+unsigned int task_rampup_multiplier(struct task_struct *p);
+
 struct task_struct {
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 	/*
