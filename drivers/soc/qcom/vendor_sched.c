@@ -92,6 +92,7 @@ enum vs_kind {
 	VS_RAMPUP_SET,
 	VS_RAMPUP_CLEAR,
 	VS_QOS_MEMBER,
+	VS_QOS_EXTREME,
 	VS_QOS_NONE,
 	VS_QOS_STATE,
 };
@@ -365,6 +366,11 @@ static int vs_set_sched_qos(char *buf, unsigned int state)
 	 * value being used while the task is unset; only this reset stops it
 	 * being resurrected if the task is later re-registered. Value before
 	 * flag, as the set path does.
+	 *
+	 * Moving between the two grants deliberately leaves the stored value
+	 * alone: the gate decides whether it is honoured, so a promotion to
+	 * extreme takes effect without a re-vote and a demotion to standard
+	 * cannot discard a multiplier the HAL has just written.
 	 */
 	if (state == SCHED_QOS_NONE) {
 		WRITE_ONCE(task->rampup_multiplier,
@@ -505,6 +511,13 @@ static int vs_node_apply(struct vs_node *node, char *buf, char *value,
 			return ret;
 
 		/* The node reports the tid it was given. */
+		stored = buf;
+		break;
+	case VS_QOS_EXTREME:
+		ret = vs_set_sched_qos(buf, SCHED_QOS_EXTREME);
+		if (ret < 0)
+			return ret;
+
 		stored = buf;
 		break;
 	case VS_QOS_NONE:
@@ -685,7 +698,7 @@ static const struct vs_desc vs_sched_qos_nodes[] = {
 	{ "rampup_multiplier_set",		VS_RAMPUP_SET },
 	{ "rampup_multiplier_clear",		VS_RAMPUP_CLEAR },
 	{ "sched_qos_sensitive_standard",	VS_QOS_MEMBER },
-	{ "sched_qos_sensitive_extreme",	VS_QOS_MEMBER },
+	{ "sched_qos_sensitive_extreme",	VS_QOS_EXTREME },
 	{ "sched_qos_none",			VS_QOS_NONE },
 	{ "qos_state",				VS_QOS_STATE },
 };

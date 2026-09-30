@@ -2686,9 +2686,19 @@ unsigned long task_util_est(struct task_struct *p);
 unsigned int uclamp_task(struct task_struct *p);
 bool uclamp_latency_sensitive(struct task_struct *p);
 
+/*
+ * Both grants are members, so this one gates prefer-idle and latency
+ * sensitivity. Only the extreme grant is entitled to the rampup multiplier,
+ * which sched_qos_extreme() decides.
+ */
 static inline bool sched_qos_member(const struct task_struct *p)
 {
-	return READ_ONCE(p->sched_qos_set) == SCHED_QOS_MEMBER;
+	return READ_ONCE(p->sched_qos_set) != SCHED_QOS_NONE;
+}
+
+static inline bool sched_qos_extreme(const struct task_struct *p)
+{
+	return READ_ONCE(p->sched_qos_set) == SCHED_QOS_EXTREME;
 }
 bool uclamp_boosted(struct task_struct *p);
 

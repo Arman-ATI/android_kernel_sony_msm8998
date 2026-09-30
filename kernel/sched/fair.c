@@ -3207,13 +3207,15 @@ static inline int per_task_boost(struct task_struct *p)
 
 /*
  * Effective util_est rampup multiplier for a task: the power HAL's per-task
- * value while the task is a SCHED_QOS member, the global default otherwise.
- * Defined outside the CONFIG_SMP block so the vendor shim can report it; the
- * predicate stays here, in one place.
+ * value while the task holds the SCHED_QOS extreme grant, the global default
+ * otherwise. The standard grant leaves the stored value alone but is not
+ * entitled to it, so a promotion to extreme takes effect without the HAL
+ * having to vote again. Defined outside the CONFIG_SMP block so the vendor
+ * shim can report it; the predicate stays here, in one place.
  */
 unsigned int task_rampup_multiplier(struct task_struct *p)
 {
-	if (READ_ONCE(p->rampup_multiplier_set) && !sched_qos_member(p))
+	if (READ_ONCE(p->rampup_multiplier_set) && !sched_qos_extreme(p))
 		return READ_ONCE(sysctl_sched_rampup_multiplier);
 
 	return READ_ONCE(p->rampup_multiplier);

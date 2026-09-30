@@ -831,11 +831,13 @@ struct wake_q_node {
 };
 
 /*
- * Per-task SCHED_QOS registration: an explicit member, or not.
+ * Per-task SCHED_QOS registration. The standard grant is prefer-idle; the
+ * extreme grant is that plus the util_est rampup multiplier.
  */
 enum sched_qos_state {
 	SCHED_QOS_NONE		= 0,
 	SCHED_QOS_MEMBER	= 1,
+	SCHED_QOS_EXTREME	= 2,
 };
 
 /* Effective util_est rampup multiplier; defined in kernel/sched/fair.c. */
