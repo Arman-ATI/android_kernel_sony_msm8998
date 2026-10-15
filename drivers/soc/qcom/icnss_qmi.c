@@ -1450,6 +1450,9 @@ int icnss_send_vbatt_update(struct icnss_priv *priv, uint64_t voltage_uv)
 	if (test_bit(ICNSS_FW_DOWN, &priv->state))
 		return -EINVAL;
 
+	if (test_bit(ICNSS_FW_NO_VBATT, &priv->state))
+		return 0;
+
 	icnss_pr_dbg("Sending Vbatt message, state: 0x%lx\n", priv->state);
 
 	req = kzalloc(sizeof(*req), GFP_KERNEL);
@@ -1489,9 +1492,16 @@ int icnss_send_vbatt_update(struct icnss_priv *priv, uint64_t voltage_uv)
 				    ret);
 		goto out;
 	} else if (resp->resp.result != QMI_RESULT_SUCCESS_V01) {
+		ret = -resp->resp.result;
+		if (resp->resp.error == QMI_ERR_NOT_SUPPORTED_V01) {
+			if (!test_and_set_bit(ICNSS_FW_NO_VBATT, &priv->state))
+				icnss_pr_err("VBATT service not supported by FW, result:%d error:%d, no further vbatt updates\n",
+					    resp->resp.result, resp->resp.error);
+			ret = 0;
+			goto out;
+		}
 		icnss_pr_err("QMI Vbatt message request rejected, result:%d error:%d\n",
 				    resp->resp.result, resp->resp.error);
-		ret = -resp->resp.result;
 		goto out;
 	}
 

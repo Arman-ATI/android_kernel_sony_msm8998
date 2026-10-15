@@ -3033,6 +3033,9 @@ static int icnss_stats_show_state(struct seq_file *s, struct icnss_priv *priv)
 		case ICNSS_FW_READY:
 			seq_puts(s, "FW READY");
 			continue;
+		case ICNSS_FW_NO_VBATT:
+			seq_puts(s, "FW NO VBATT");
+			continue;
 		case ICNSS_DRIVER_PROBED:
 			seq_puts(s, "DRIVER PROBED");
 			continue;
