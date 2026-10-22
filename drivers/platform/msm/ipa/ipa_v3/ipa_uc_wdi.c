@@ -24,7 +24,16 @@
 #define IPA_WDI_CONNECTED BIT(0)
 #define IPA_WDI_ENABLED BIT(1)
 #define IPA_WDI_RESUMED BIT(2)
+#define IPA_WDI_TORN_DOWN BIT(3)
+#define IPA_WDI_FW_SETUP BIT(4)
 #define IPA_UC_POLL_SLEEP_USEC 100
+
+/*
+ * Every uC mapping is created twice, once at the requested address and
+ * once inside this window, because the uC references the window copy.
+ */
+#define IPA_UC_ALIAS_BASE			0x20000000ULL
+#define IPA_UC_ALIAS_LIMIT			0x40000000ULL
 
 #define GSI_STOP_MAX_RETRY_CNT 10
 
@@ -35,6 +44,26 @@ struct ipa_wdi_res {
 };
 
 static struct ipa_wdi_res wdi_res[IPA_WDI_MAX_RES];
+
+struct ipa_uc_wdi_mapping {
+	phys_addr_t pa;
+	unsigned long iova;
+	size_t size;
+	size_t original_mapped;
+	size_t original_unmapped;
+	size_t alias_mapped;
+	size_t alias_unmapped;
+};
+
+struct ipa_uc_wdi_resource {
+	struct ipa_uc_wdi_mapping *maps;
+	unsigned int nents;
+};
+
+static struct ipa_uc_wdi_resource ipa_uc_wdi_res[IPA_WDI_MAX_RES];
+static DEFINE_MUTEX(ipa_uc_wdi_lock);
+static unsigned long ipa_uc_wdi_va_baseline;
+static bool ipa_uc_wdi_va_captured;
 
 static void ipa3_uc_wdi_loaded_handler(void);
 
@@ -573,14 +602,108 @@ static int ipa_create_ap_smmu_mapping_pa(phys_addr_t pa, size_t len,
 	return 0;
 }
 
-static int ipa_create_uc_smmu_mapping_pa(phys_addr_t pa, size_t len,
-		bool device, unsigned long *iova)
+static int ipa_uc_wdi_check_granule(struct iommu_domain *domain)
+{
+	unsigned long bitmap;
+
+	if (!domain)
+		return -EINVAL;
+
+	bitmap = domain->pgsize_bitmap;
+	if (!bitmap || !(bitmap & PAGE_SIZE) ||
+	    (1UL << __ffs(bitmap)) != PAGE_SIZE)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int ipa_uc_wdi_check_range(unsigned long iova, size_t size)
+{
+	unsigned long alias;
+
+	if (iova >= IPA_UC_ALIAS_BASE ||
+	    size > IPA_UC_ALIAS_BASE - iova)
+		return -ERANGE;
+
+	alias = IPA_UC_ALIAS_BASE + iova;
+	if (size > IPA_UC_ALIAS_LIMIT - alias)
+		return -ERANGE;
+
+	return 0;
+}
+
+static int ipa_uc_wdi_map_prefix(struct iommu_domain *domain,
+		unsigned long iova, phys_addr_t pa, size_t size, int prot,
+		size_t *mapped)
+{
+	int ret;
+
+	while (*mapped < size) {
+		ret = ipa3_iommu_map(domain, iova + *mapped, pa + *mapped,
+				PAGE_SIZE, prot);
+		if (ret)
+			return ret;
+		*mapped += PAGE_SIZE;
+	}
+
+	return 0;
+}
+
+static int ipa_uc_wdi_unmap_prefix(struct iommu_domain *domain,
+		unsigned long iova, size_t mapped, size_t *unmapped)
+{
+	size_t done;
+
+	while (*unmapped < mapped) {
+		done = iommu_unmap(domain, iova + *unmapped, PAGE_SIZE);
+		if (done != PAGE_SIZE)
+			return -EIO;
+		*unmapped += PAGE_SIZE;
+	}
+
+	return 0;
+}
+
+static int ipa_uc_wdi_unmap_one(struct iommu_domain *domain,
+		struct ipa_uc_wdi_mapping *map)
+{
+	int ret;
+
+	ret = ipa_uc_wdi_unmap_prefix(domain,
+			IPA_UC_ALIAS_BASE + map->iova,
+			map->alias_mapped, &map->alias_unmapped);
+	if (ret)
+		return ret;
+
+	return ipa_uc_wdi_unmap_prefix(domain, map->iova,
+			map->original_mapped, &map->original_unmapped);
+}
+
+static void ipa_uc_wdi_retire_va(struct ipa_smmu_cb_ctx *cb)
+{
+	int i;
+
+	if (!ipa_uc_wdi_va_captured)
+		return;
+
+	for (i = 0; i < IPA_WDI_MAX_RES; i++)
+		if (ipa_uc_wdi_res[i].maps)
+			return;
+
+	cb->next_addr = ipa_uc_wdi_va_baseline;
+	ipa_uc_wdi_va_captured = false;
+}
+
+static int ipa_create_uc_smmu_mapping_pa(int res_idx, phys_addr_t pa,
+		size_t len, bool device, unsigned long *iova)
 {
 	struct ipa_smmu_cb_ctx *cb = ipa3_get_smmu_ctx(IPA_SMMU_CB_UC);
-	unsigned long va = roundup(cb->next_addr, PAGE_SIZE);
+	struct ipa_uc_wdi_resource *res;
+	struct ipa_uc_wdi_mapping *map;
+	unsigned long va;
+	phys_addr_t map_pa;
+	size_t off, size;
 	int prot = IOMMU_READ | IOMMU_WRITE;
-	size_t true_len = roundup(len + pa - rounddown(pa, PAGE_SIZE),
-			PAGE_SIZE);
 	int ret;
 
 	if (!cb->valid) {
@@ -588,18 +711,78 @@ static int ipa_create_uc_smmu_mapping_pa(phys_addr_t pa, size_t len,
 		return -EINVAL;
 	}
 
-	ret = ipa3_iommu_map(cb->iommu_domain, va, rounddown(pa, PAGE_SIZE),
-			true_len,
-			device ? (prot | IOMMU_MMIO) : prot);
-	if (ret) {
-		IPAERR("iommu map failed for pa=%pa len=%zu\n", &pa, true_len);
+	if (res_idx < 0 || res_idx >= IPA_WDI_MAX_RES)
 		return -EINVAL;
+
+	if (!len)
+		return -EINVAL;
+	off = offset_in_page(pa);
+	if (len > SIZE_MAX - off ||
+	    len + off > SIZE_MAX - (PAGE_SIZE - 1))
+		return -ERANGE;
+
+	if (ipa_uc_wdi_check_granule(cb->iommu_domain))
+		return -EINVAL;
+
+	map_pa = round_down(pa, PAGE_SIZE);
+	size = PAGE_ALIGN(len + off);
+	prot |= device ? IOMMU_MMIO : 0;
+
+	mutex_lock(&ipa_uc_wdi_lock);
+	res = &ipa_uc_wdi_res[res_idx];
+	if (res->maps) {
+		ret = -EBUSY;
+		goto out_unlock;
+	}
+
+	va = roundup(cb->next_addr, PAGE_SIZE);
+	ret = ipa_uc_wdi_check_range(va, size);
+	if (ret)
+		goto out_unlock;
+
+	map = kzalloc(sizeof(*map), GFP_KERNEL);
+	if (!map) {
+		ret = -ENOMEM;
+		goto out_unlock;
+	}
+
+	if (!ipa_uc_wdi_va_captured) {
+		ipa_uc_wdi_va_baseline = cb->next_addr;
+		ipa_uc_wdi_va_captured = true;
+	}
+
+	res->maps = map;
+	res->nents = 1;
+	map->pa = map_pa;
+	map->iova = va;
+	map->size = size;
+	cb->next_addr = va + size;
+
+	ret = ipa_uc_wdi_map_prefix(cb->iommu_domain, va, map_pa, size, prot,
+			&map->original_mapped);
+	if (!ret)
+		ret = ipa_uc_wdi_map_prefix(cb->iommu_domain,
+				IPA_UC_ALIAS_BASE + va, map_pa, size, prot,
+				&map->alias_mapped);
+
+	if (ret) {
+		if (ipa_uc_wdi_unmap_one(cb->iommu_domain, map)) {
+			ret = -EUCLEAN;
+			goto out_unlock;
+		}
+		kfree(map);
+		res->maps = NULL;
+		res->nents = 0;
+		ipa_uc_wdi_retire_va(cb);
+		goto out_unlock;
 	}
 
 	ipa3_ctx->wdi_map_cnt++;
-	cb->next_addr = va + true_len;
-	*iova = va + pa - rounddown(pa, PAGE_SIZE);
-	return 0;
+	*iova = va + off;
+
+out_unlock:
+	mutex_unlock(&ipa_uc_wdi_lock);
+	return ret;
 }
 
 static int ipa_create_ap_smmu_mapping_sgt(struct sg_table *sgt,
@@ -673,55 +856,114 @@ bad_mapping:
 	return -EINVAL;
 }
 
-
-static int ipa_create_uc_smmu_mapping_sgt(struct sg_table *sgt,
-		unsigned long *iova)
+static int ipa_create_uc_smmu_mapping_sgt(int res_idx,
+		struct sg_table *sgt, unsigned long *iova)
 {
 	struct ipa_smmu_cb_ctx *cb = ipa3_get_smmu_ctx(IPA_SMMU_CB_UC);
-	unsigned long va = roundup(cb->next_addr, PAGE_SIZE);
-	int prot = IOMMU_READ | IOMMU_WRITE;
-	int ret;
-	int i;
+	struct ipa_uc_wdi_resource *res;
+	struct ipa_uc_wdi_mapping *map;
+	unsigned long va, start;
 	struct scatterlist *sg;
-	unsigned long start_iova = va;
-	phys_addr_t phys;
-	size_t len;
-	int count = 0;
+	int prot = IOMMU_READ | IOMMU_WRITE;
+	size_t span, total = 0;
+	int ret, i;
 
 	if (!cb->valid) {
 		IPAERR("No SMMU CB setup\n");
 		return -EINVAL;
 	}
-	if (!sgt) {
-		IPAERR("Bad parameters, scatter / gather list is NULL\n");
+	if (!sgt || !sgt->nents) {
+		IPAERR("Bad scatter / gather list\n");
 		return -EINVAL;
 	}
 
+	if (res_idx < 0 || res_idx >= IPA_WDI_MAX_RES)
+		return -EINVAL;
+
+	if (ipa_uc_wdi_check_granule(cb->iommu_domain))
+		return -EINVAL;
+
 	for_each_sg(sgt->sgl, sg, sgt->nents, i) {
-		/* directly get sg_tbl PA from wlan-driver */
-		phys = sg->dma_address;
-		len = PAGE_ALIGN(sg->offset + sg->length);
-
-		ret = ipa3_iommu_map(cb->iommu_domain, va, phys, len, prot);
-		if (ret) {
-			IPAERR("iommu map failed for pa=%pa len=%zu\n",
-					&phys, len);
-			goto bad_mapping;
-		}
-		va += len;
-		ipa3_ctx->wdi_map_cnt++;
-		count++;
+		if (!IS_ALIGNED(sg->dma_address, PAGE_SIZE))
+			return -EINVAL;
+		span = (size_t)sg->offset + sg->length;
+		if (!span || span > SIZE_MAX - (PAGE_SIZE - 1))
+			return span ? -ERANGE : -EINVAL;
+		total += PAGE_ALIGN(span);
+		if (total < PAGE_ALIGN(span))
+			return -ERANGE;
 	}
-	cb->next_addr = va;
-	*iova = start_iova;
 
-	return 0;
+	mutex_lock(&ipa_uc_wdi_lock);
+	res = &ipa_uc_wdi_res[res_idx];
+	if (res->maps) {
+		ret = -EBUSY;
+		goto out_unlock;
+	}
 
-bad_mapping:
-	for_each_sg(sgt->sgl, sg, count, i)
-		iommu_unmap(cb->iommu_domain, sg_dma_address(sg),
-				sg_dma_len(sg));
-	return -EINVAL;
+	start = roundup(cb->next_addr, PAGE_SIZE);
+	ret = ipa_uc_wdi_check_range(start, total);
+	if (ret)
+		goto out_unlock;
+
+	map = kcalloc(sgt->nents, sizeof(*map), GFP_KERNEL);
+	if (!map) {
+		ret = -ENOMEM;
+		goto out_unlock;
+	}
+
+	if (!ipa_uc_wdi_va_captured) {
+		ipa_uc_wdi_va_baseline = cb->next_addr;
+		ipa_uc_wdi_va_captured = true;
+	}
+
+	res->maps = map;
+	res->nents = sgt->nents;
+	cb->next_addr = start + total;
+
+	va = start;
+	for_each_sg(sgt->sgl, sg, sgt->nents, i) {
+		map[i].pa = sg->dma_address;
+		map[i].iova = va;
+		map[i].size = PAGE_ALIGN((size_t)sg->offset + sg->length);
+
+		ret = ipa_uc_wdi_map_prefix(cb->iommu_domain, va, map[i].pa,
+				map[i].size, prot, &map[i].original_mapped);
+		if (!ret)
+			ret = ipa_uc_wdi_map_prefix(cb->iommu_domain,
+					IPA_UC_ALIAS_BASE + va, map[i].pa,
+					map[i].size, prot,
+					&map[i].alias_mapped);
+		if (ret)
+			break;
+		ipa3_ctx->wdi_map_cnt++;
+		va += map[i].size;
+	}
+
+	if (ret) {
+		for (i = 0; i < sgt->nents; i++)
+			if (ipa_uc_wdi_unmap_one(cb->iommu_domain, &map[i]))
+				ret = -EUCLEAN;
+		if (ret == -EUCLEAN)
+			goto out_unlock;
+		for (i = 0; i < sgt->nents; i++) {
+			if (map[i].size &&
+			    map[i].original_mapped == map[i].size &&
+			    map[i].alias_mapped == map[i].size)
+				ipa3_ctx->wdi_map_cnt--;
+		}
+		kfree(map);
+		res->maps = NULL;
+		res->nents = 0;
+		ipa_uc_wdi_retire_va(cb);
+		goto out_unlock;
+	}
+
+	*iova = start;
+
+out_unlock:
+	mutex_unlock(&ipa_uc_wdi_lock);
+	return ret;
 }
 
 static void ipa_release_ap_smmu_mappings(enum ipa_client_type client)
@@ -762,13 +1004,16 @@ static void ipa_release_ap_smmu_mappings(enum ipa_client_type client)
 		cb->next_addr = cb->va_end;
 }
 
-static void ipa_release_uc_smmu_mappings(enum ipa_client_type client)
+static int ipa_release_uc_smmu_mappings(enum ipa_client_type client)
 {
 	struct ipa_smmu_cb_ctx *cb = ipa3_get_smmu_ctx(IPA_SMMU_CB_UC);
-	int i;
-	int j;
-	int start;
-	int end;
+	struct ipa_uc_wdi_resource *res;
+	int i, j, start, end;
+	int ret = 0;
+	bool done;
+
+	if (!cb->valid)
+		return -EINVAL;
 
 	if (IPA_CLIENT_IS_CONS(client)) {
 		start = IPA_WDI_TX_RING_RES;
@@ -781,23 +1026,40 @@ static void ipa_release_uc_smmu_mappings(enum ipa_client_type client)
 			end = IPA_WDI_RX_RING_RP_RES;
 	}
 
+	mutex_lock(&ipa_uc_wdi_lock);
 	for (i = start; i <= end; i++) {
-		if (wdi_res[i].valid) {
-			for (j = 0; j < wdi_res[i].nents; j++) {
-				iommu_unmap(cb->iommu_domain,
-					wdi_res[i].res[j].iova,
-					wdi_res[i].res[j].size);
-				ipa3_ctx->wdi_map_cnt--;
+		res = &ipa_uc_wdi_res[i];
+		if (!res->maps)
+			continue;
+
+		done = true;
+		for (j = 0; j < res->nents; j++) {
+			if (ipa_uc_wdi_unmap_one(cb->iommu_domain,
+						 &res->maps[j])) {
+				ret = -EIO;
+				done = false;
 			}
-			kfree(wdi_res[i].res);
-			wdi_res[i].res = NULL;
-			wdi_res[i].valid = false;
 		}
+
+		if (!done)
+			continue;
+
+		for (j = 0; j < res->nents; j++) {
+			if (res->maps[j].size &&
+			    res->maps[j].original_mapped == res->maps[j].size &&
+			    res->maps[j].alias_mapped == res->maps[j].size)
+				ipa3_ctx->wdi_map_cnt--;
+		}
+		kfree(res->maps);
+		res->maps = NULL;
+		res->nents = 0;
 	}
 
-	if (ipa3_ctx->wdi_map_cnt == 0)
-		cb->next_addr = cb->va_end;
+	if (!ret)
+		ipa_uc_wdi_retire_va(cb);
+	mutex_unlock(&ipa_uc_wdi_lock);
 
+	return ret;
 }
 
 static void ipa_save_uc_smmu_mapping_pa(int res_idx, phys_addr_t pa,
@@ -861,63 +1123,37 @@ int ipa_create_uc_smmu_mapping(int res_idx, bool wlan_smmu_en,
 		phys_addr_t pa, struct sg_table *sgt, size_t len, bool device,
 		unsigned long *iova)
 {
-	/* support for SMMU on WLAN but no SMMU on IPA */
-	if (wlan_smmu_en && ipa3_ctx->s1_bypass_arr[IPA_SMMU_CB_UC]) {
-		IPAERR("Unsupported SMMU pairing\n");
+	if (res_idx < 0 || res_idx >= IPA_WDI_MAX_RES)
 		return -EINVAL;
-	}
 
-	/* legacy: no SMMUs on either end */
-	if (!wlan_smmu_en && ipa3_ctx->s1_bypass_arr[IPA_SMMU_CB_UC]) {
+	if (ipa3_ctx->s1_bypass_arr[IPA_SMMU_CB_UC]) {
+		if (wlan_smmu_en) {
+			IPAERR("Unsupported SMMU pairing\n");
+			return -EINVAL;
+		}
 		*iova = pa;
 		return 0;
 	}
 
-	/* no SMMU on WLAN but SMMU on IPA */
-	if (!wlan_smmu_en && !ipa3_ctx->s1_bypass_arr[IPA_SMMU_CB_UC]) {
-		if (ipa_create_uc_smmu_mapping_pa(pa, len,
-			(res_idx == IPA_WDI_CE_DB_RES) ? true : false, iova)) {
-			IPAERR("Fail to create mapping res %d\n", res_idx);
-			return -EFAULT;
-		}
-		ipa_save_uc_smmu_mapping_pa(res_idx, pa, *iova, len);
-		return 0;
-	}
+	if (!wlan_smmu_en)
+		return ipa_create_uc_smmu_mapping_pa(res_idx, pa, len,
+				device, iova);
 
-	/* SMMU on WLAN and SMMU on IPA */
-	if (wlan_smmu_en && !ipa3_ctx->s1_bypass_arr[IPA_SMMU_CB_UC]) {
-		switch (res_idx) {
-		case IPA_WDI_RX_RING_RP_RES:
-		case IPA_WDI_RX_COMP_RING_WP_RES:
-		case IPA_WDI_CE_DB_RES:
-		case IPA_WDI_TX_DB_RES:
-			if (ipa_create_uc_smmu_mapping_pa(pa, len,
-				(res_idx == IPA_WDI_CE_DB_RES) ? true : false,
-				iova)) {
-				IPAERR("Fail to create mapping res %d\n",
-						res_idx);
-				return -EFAULT;
-			}
-			ipa_save_uc_smmu_mapping_pa(res_idx, pa, *iova, len);
-			break;
-		case IPA_WDI_RX_RING_RES:
-		case IPA_WDI_RX_COMP_RING_RES:
-		case IPA_WDI_TX_RING_RES:
-		case IPA_WDI_CE_RING_RES:
-			if (ipa_create_uc_smmu_mapping_sgt(sgt, iova)) {
-				IPAERR("Fail to create mapping res %d\n",
-						res_idx);
-				WARN_ON(1);
-				return -EFAULT;
-			}
-			ipa_save_uc_smmu_mapping_sgt(res_idx, sgt, *iova);
-			break;
-		default:
-			WARN_ON(1);
-		}
+	switch (res_idx) {
+	case IPA_WDI_RX_RING_RP_RES:
+	case IPA_WDI_RX_COMP_RING_WP_RES:
+	case IPA_WDI_CE_DB_RES:
+	case IPA_WDI_TX_DB_RES:
+		return ipa_create_uc_smmu_mapping_pa(res_idx, pa, len,
+				device, iova);
+	case IPA_WDI_RX_RING_RES:
+	case IPA_WDI_RX_COMP_RING_RES:
+	case IPA_WDI_TX_RING_RES:
+	case IPA_WDI_CE_RING_RES:
+		return ipa_create_uc_smmu_mapping_sgt(res_idx, sgt, iova);
+	default:
+		return -EINVAL;
 	}
-
-	return 0;
 }
 
 void ipa3_release_wdi3_gsi_smmu_mappings(u8 dir)
@@ -1432,7 +1668,8 @@ int ipa3_connect_gsi_wdi_pipe(struct ipa_wdi_in_params *in,
 						IPA_ENABLE_AGGR;
 	}
 	if (!ep->skip_ep_cfg) {
-		if (ipa3_cfg_ep(ipa_ep_idx, &in->sys.ipa_ep_cfg)) {
+		result = ipa3_cfg_ep(ipa_ep_idx, &in->sys.ipa_ep_cfg);
+		if (result) {
 			IPAERR("fail to configure EP.\n");
 			goto ipa_cfg_ep_fail;
 		}
@@ -1577,6 +1814,7 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 	struct IpaHwWdi2RxSetUpCmdData_t *rx_2;
 
 	struct ipa_ep_cfg_ctrl ep_cfg_ctrl;
+	union IpaHwWdiCommonChCmdData_t tear;
 	unsigned long va;
 	phys_addr_t pa;
 	u32 len;
@@ -1616,17 +1854,20 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 	ipa_ep_idx = ipa3_get_ep_mapping(in->sys.client);
 	if (ipa_ep_idx == -1) {
 		IPAERR("fail to alloc EP.\n");
-		goto fail;
+		return -EINVAL;
 	}
 
 	ep = &ipa3_ctx->ep[ipa_ep_idx];
 
 	if (ep->valid) {
 		IPAERR("EP already allocated.\n");
-		goto fail;
+		return -EBUSY;
 	}
 
 	memset(&ipa3_ctx->ep[ipa_ep_idx], 0, sizeof(struct ipa3_ep_context));
+	ep->valid = 1;
+	ep->client = in->sys.client;
+	ep->keep_ipa_awake = in->sys.keep_ipa_awake;
 	IPA_ACTIVE_CLIENTS_INC_EP(in->sys.client);
 
 	IPADBG("client=%d ep=%d\n", in->sys.client, ipa_ep_idx);
@@ -1722,15 +1963,15 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 				in->smmu_enabled,
 				in->u.dl_smmu.comp_ring_size,
 				in->u.dl.comp_ring_size);
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_TX_RING_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_TX_RING_RES,
 					in->smmu_enabled,
 					in->u.dl.comp_ring_base_pa,
 					&in->u.dl_smmu.comp_ring,
 					len,
 					false,
-					&va)) {
+					&va);
+			if (result) {
 				IPAERR("fail to create uc mapping TX ring.\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			tx_2->comp_ring_base_pa_hi =
@@ -1748,15 +1989,15 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 					in->u.dl_smmu.ce_ring_size,
 					in->u.dl.ce_ring_size);
 			/* WA: wlan passed ce_ring sg_table PA directly */
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_CE_RING_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_CE_RING_RES,
 						in->smmu_enabled,
 						in->u.dl.ce_ring_base_pa,
 						&in->u.dl_smmu.ce_ring,
 						len,
 						false,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc mapping CE ring.\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			tx_2->ce_ring_base_pa_hi =
@@ -1769,15 +2010,15 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 
 			pa = in->smmu_enabled ? in->u.dl_smmu.ce_door_bell_pa :
 				in->u.dl.ce_door_bell_pa;
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_CE_DB_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_CE_DB_RES,
 						in->smmu_enabled,
 						pa,
 						NULL,
 						4,
 						true,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc mapping CE DB.\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			tx_2->ce_ring_doorbell_pa_hi =
@@ -1800,15 +2041,15 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 					in->smmu_enabled,
 					in->u.dl_smmu.comp_ring_size,
 					in->u.dl.comp_ring_size);
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_TX_RING_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_TX_RING_RES,
 						in->smmu_enabled,
 						in->u.dl.comp_ring_base_pa,
 						&in->u.dl_smmu.comp_ring,
 						len,
 						false,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc mapping TX ring.\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			tx->comp_ring_base_pa = va;
@@ -1820,30 +2061,30 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 					in->u.dl_smmu.ce_ring_size,
 					in->u.dl.ce_ring_size,
 					va);
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_CE_RING_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_CE_RING_RES,
 						in->smmu_enabled,
 						in->u.dl.ce_ring_base_pa,
 						&in->u.dl_smmu.ce_ring,
 						len,
 						false,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc mapping CE ring.\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			tx->ce_ring_base_pa = va;
 			tx->ce_ring_size = len;
 			pa = in->smmu_enabled ? in->u.dl_smmu.ce_door_bell_pa :
 				in->u.dl.ce_door_bell_pa;
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_CE_DB_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_CE_DB_RES,
 						in->smmu_enabled,
 						pa,
 						NULL,
 						4,
 						true,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc mapping CE DB.\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 
@@ -1876,15 +2117,15 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 				in->smmu_enabled,
 				in->u.ul_smmu.rdy_ring_size,
 				in->u.ul.rdy_ring_size);
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_RX_RING_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_RX_RING_RES,
 						in->smmu_enabled,
 						in->u.ul.rdy_ring_base_pa,
 						&in->u.ul_smmu.rdy_ring,
 						len,
 						false,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc RX_2 ring.\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			rx_2->rx_ring_base_pa_hi =
@@ -1897,15 +2138,15 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 
 			pa = in->smmu_enabled ? in->u.ul_smmu.rdy_ring_rp_pa :
 				in->u.ul.rdy_ring_rp_pa;
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_RX_RING_RP_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_RX_RING_RP_RES,
 						in->smmu_enabled,
 						pa,
 						NULL,
 						4,
 						false,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc RX_2 rng RP\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			rx_2->rx_ring_rp_pa_hi =
@@ -1921,15 +2162,15 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 					in->smmu_enabled,
 					in->u.ul_smmu.rdy_comp_ring_size,
 					in->u.ul.rdy_comp_ring_size);
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_RX_COMP_RING_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_RX_COMP_RING_RES,
 						in->smmu_enabled,
 						in->u.ul.rdy_comp_ring_base_pa,
 						&in->u.ul_smmu.rdy_comp_ring,
 						len,
 						false,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc RX_2 comp_ring.\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			rx_2->rx_comp_ring_base_pa_hi =
@@ -1943,16 +2184,16 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 			pa = in->smmu_enabled ?
 				in->u.ul_smmu.rdy_comp_ring_wp_pa :
 				in->u.ul.rdy_comp_ring_wp_pa;
-			if (ipa_create_uc_smmu_mapping(
+			result = ipa_create_uc_smmu_mapping(
 						IPA_WDI_RX_COMP_RING_WP_RES,
 						in->smmu_enabled,
 						pa,
 						NULL,
 						4,
 						false,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc RX_2 comp_rng WP\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			rx_2->rx_comp_ring_wp_pa_hi =
@@ -1971,15 +2212,15 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 					in->smmu_enabled,
 					in->u.ul_smmu.rdy_ring_size,
 					in->u.ul.rdy_ring_size);
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_RX_RING_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_RX_RING_RES,
 						in->smmu_enabled,
 						in->u.ul.rdy_ring_base_pa,
 						&in->u.ul_smmu.rdy_ring,
 						len,
 						false,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc mapping RX ring.\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			rx->rx_ring_base_pa = va;
@@ -1987,15 +2228,15 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 
 			pa = in->smmu_enabled ? in->u.ul_smmu.rdy_ring_rp_pa :
 				in->u.ul.rdy_ring_rp_pa;
-			if (ipa_create_uc_smmu_mapping(IPA_WDI_RX_RING_RP_RES,
+			result = ipa_create_uc_smmu_mapping(IPA_WDI_RX_RING_RP_RES,
 						in->smmu_enabled,
 						pa,
 						NULL,
 						4,
 						false,
-						&va)) {
+						&va);
+			if (result) {
 				IPAERR("fail to create uc mapping RX rng RP\n");
-				result = -ENOMEM;
 				goto uc_timeout;
 			}
 			rx->rx_ring_rp_pa = va;
@@ -2008,9 +2249,6 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 					IPA_HW_WDI_RX_MBOX_START_INDEX % 32);
 	}
 
-	ep->valid = 1;
-	ep->client = in->sys.client;
-	ep->keep_ipa_awake = in->sys.keep_ipa_awake;
 	result = ipa3_disable_data_path(ipa_ep_idx);
 	if (result) {
 		IPAERR("disable data path failed res=%d clnt=%d.\n", result,
@@ -2034,6 +2272,7 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 		result = -EFAULT;
 		goto uc_timeout;
 	}
+	ep->uc_offload_state |= IPA_WDI_FW_SETUP;
 
 	ep->skip_ep_cfg = in->sys.skip_ep_cfg;
 	ep->client_notify = in->sys.notify;
@@ -2055,7 +2294,8 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 						IPA_ENABLE_AGGR;
 	}
 	if (!ep->skip_ep_cfg) {
-		if (ipa3_cfg_ep(ipa_ep_idx, &in->sys.ipa_ep_cfg)) {
+		result = ipa3_cfg_ep(ipa_ep_idx, &in->sys.ipa_ep_cfg);
+		if (result) {
 			IPAERR("fail to configure EP.\n");
 			goto ipa_cfg_ep_fail;
 		}
@@ -2076,20 +2316,44 @@ int ipa3_connect_wdi_pipe(struct ipa_wdi_in_params *in,
 		IPA_ACTIVE_CLIENTS_DEC_EP(in->sys.client);
 
 	dma_free_coherent(ipa3_ctx->uc_pdev, cmd.size, cmd.base, cmd.phys_base);
-	ep->uc_offload_state |= IPA_WDI_CONNECTED;
+	ep->uc_offload_state = IPA_WDI_CONNECTED;
 	IPADBG("client %d (ep: %d) connected\n", in->sys.client, ipa_ep_idx);
 
 	return 0;
 
 ipa_cfg_ep_fail:
-	memset(&ipa3_ctx->ep[ipa_ep_idx], 0, sizeof(struct ipa3_ep_context));
 uc_timeout:
-	ipa_release_uc_smmu_mappings(in->sys.client);
+	if (ep->uc_offload_state & IPA_WDI_FW_SETUP) {
+		tear.params.ipa_pipe_number = ipa_ep_idx;
+		if (ipa3_uc_send_cmd(tear.raw32b,
+				IPA_CPU_2_HW_CMD_WDI_TEAR_DOWN,
+				IPA_HW_2_CPU_WDI_CMD_STATUS_SUCCESS,
+				false, 10*HZ)) {
+			out->clnt_hdl = ipa_ep_idx;
+			dma_free_coherent(ipa3_ctx->uc_pdev, cmd.size,
+					  cmd.base, cmd.phys_base);
+			if (!ep->keep_ipa_awake)
+				IPA_ACTIVE_CLIENTS_DEC_EP(in->sys.client);
+			return -EUCLEAN;
+		}
+		ep->uc_offload_state &= ~IPA_WDI_FW_SETUP;
+	}
+
+	ep->uc_offload_state |= IPA_WDI_TORN_DOWN;
+
+	if (ipa_release_uc_smmu_mappings(in->sys.client)) {
+		out->clnt_hdl = ipa_ep_idx;
+		dma_free_coherent(ipa3_ctx->uc_pdev, cmd.size, cmd.base,
+				  cmd.phys_base);
+		if (!ep->keep_ipa_awake)
+			IPA_ACTIVE_CLIENTS_DEC_EP(in->sys.client);
+		return -EUCLEAN;
+	}
 	dma_free_coherent(ipa3_ctx->uc_pdev, cmd.size, cmd.base, cmd.phys_base);
 dma_alloc_fail:
+	memset(&ipa3_ctx->ep[ipa_ep_idx], 0, sizeof(struct ipa3_ep_context));
 	IPA_ACTIVE_CLIENTS_DEC_EP(in->sys.client);
-fail:
-	return result;
+	return result == -EUCLEAN ? -EFAULT : result;
 }
 
 int ipa3_disconnect_gsi_wdi_pipe(u32 clnt_hdl)
@@ -2145,9 +2409,10 @@ fail_dealloc_channel:
  */
 int ipa3_disconnect_wdi_pipe(u32 clnt_hdl)
 {
-	int result = 0;
 	struct ipa3_ep_context *ep;
 	union IpaHwWdiCommonChCmdData_t tear;
+	enum ipa_client_type client;
+	int result;
 
 	if (clnt_hdl >= ipa3_ctx->ipa_num_pipes ||
 	    ipa3_ctx->ep[clnt_hdl].valid == 0) {
@@ -2158,39 +2423,54 @@ int ipa3_disconnect_wdi_pipe(u32 clnt_hdl)
 	if (ipa3_ctx->ipa_wdi2_over_gsi)
 		return ipa3_disconnect_gsi_wdi_pipe(clnt_hdl);
 
-	result = ipa3_uc_state_check();
-	if (result)
-		return result;
-
 	IPADBG("ep=%d\n", clnt_hdl);
-
 	ep = &ipa3_ctx->ep[clnt_hdl];
+	client = ep->client;
 
-	if (ep->uc_offload_state != IPA_WDI_CONNECTED) {
-		IPAERR("WDI channel bad state %d\n", ep->uc_offload_state);
-		return -EFAULT;
+	if (!(ep->uc_offload_state & IPA_WDI_TORN_DOWN)) {
+		result = ipa3_uc_state_check();
+		if (result)
+			return result;
+
+		if (ep->uc_offload_state != IPA_WDI_CONNECTED &&
+		    ep->uc_offload_state != IPA_WDI_FW_SETUP) {
+			IPAERR("WDI channel bad state %d\n",
+			       ep->uc_offload_state);
+			return -EFAULT;
+		}
 	}
 
-	if (!ep->keep_ipa_awake)
-		IPA_ACTIVE_CLIENTS_INC_EP(ipa3_get_client_mapping(clnt_hdl));
+	IPA_ACTIVE_CLIENTS_INC_EP(client);
+
+	if (ep->uc_offload_state & IPA_WDI_TORN_DOWN)
+		goto release;
 
 	tear.params.ipa_pipe_number = clnt_hdl;
-
 	result = ipa3_uc_send_cmd(tear.raw32b,
 				IPA_CPU_2_HW_CMD_WDI_TEAR_DOWN,
 				IPA_HW_2_CPU_WDI_CMD_STATUS_SUCCESS,
 				false, 10*HZ);
-
 	if (result) {
 		result = -EFAULT;
 		goto uc_timeout;
 	}
 
-	ipa3_delete_dflt_flt_rules(clnt_hdl);
-	ipa_release_uc_smmu_mappings(ep->client);
+	if (ep->uc_offload_state & IPA_WDI_CONNECTED)
+		ipa3_delete_dflt_flt_rules(clnt_hdl);
+	ep->uc_offload_state &= ~IPA_WDI_FW_SETUP;
+	ep->uc_offload_state |= IPA_WDI_TORN_DOWN;
+
+release:
+	result = ipa_release_uc_smmu_mappings(client);
+	if (result) {
+		IPAERR("uC mapping release incomplete: %d\n", result);
+		goto uc_timeout;
+	}
+
+	if (ep->keep_ipa_awake)
+		IPA_ACTIVE_CLIENTS_DEC_EP(client);
 
 	memset(&ipa3_ctx->ep[clnt_hdl], 0, sizeof(struct ipa3_ep_context));
-
 	IPADBG("client (ep: %d) disconnected\n", clnt_hdl);
 
 	/* for AP+STA stats update */
@@ -2200,7 +2480,7 @@ int ipa3_disconnect_wdi_pipe(u32 clnt_hdl)
 		IPADBG("uc_wdi_ctx.stats_notify already null\n");
 
 uc_timeout:
-	IPA_ACTIVE_CLIENTS_DEC_EP(ipa3_get_client_mapping(clnt_hdl));
+	IPA_ACTIVE_CLIENTS_DEC_EP(client);
 	return result;
 }
 

@@ -3590,15 +3590,24 @@ QDF_STATUS wlan_ipa_uc_ol_deinit(struct wlan_ipa_priv *ipa_ctx)
 	if (!wlan_ipa_uc_is_enabled(ipa_ctx->config))
 		return status;
 
-	wlan_ipa_uc_disable_pipes(ipa_ctx, true);
+	status = wlan_ipa_uc_disable_pipes(ipa_ctx, true);
+	if (QDF_IS_STATUS_ERROR(status) &&
+	    status != QDF_STATUS_E_ALREADY) {
+		ipa_err("Failure to disable IPA pipes (status=%d)", status);
+		return status;
+	}
+	if (status == QDF_STATUS_E_ALREADY)
+		status = QDF_STATUS_SUCCESS;
 
 	if (true == ipa_ctx->uc_loaded) {
 		status = cdp_ipa_cleanup(ipa_ctx->dp_soc,
 					 ipa_ctx->tx_pipe_handle,
 					 ipa_ctx->rx_pipe_handle);
-		if (status)
+		if (status) {
 			ipa_err("Failure to cleanup IPA pipes (status=%d)",
 				status);
+			return status;
+		}
 	}
 
 	qdf_mutex_acquire(&ipa_ctx->ipa_lock);
