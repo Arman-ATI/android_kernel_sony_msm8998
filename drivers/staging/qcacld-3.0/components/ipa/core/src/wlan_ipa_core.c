@@ -1302,7 +1302,12 @@ wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx, bool force_disable)
 		  qdf_atomic_read(&ipa_ctx->pipes_disabled));
 
 	qdf_spin_lock_bh(&ipa_ctx->enable_disable_lock);
-	if (ipa_ctx->ipa_pipes_down || ipa_ctx->pipes_down_in_progress) {
+	if (ipa_ctx->pipes_down_in_progress) {
+		qdf_spin_unlock_bh(&ipa_ctx->enable_disable_lock);
+		ipa_info("IPA WDI Pipes disable in progress");
+		return QDF_STATUS_E_BUSY;
+	}
+	if (ipa_ctx->ipa_pipes_down) {
 		qdf_spin_unlock_bh(&ipa_ctx->enable_disable_lock);
 		ipa_info("IPA WDI Pipes are already deactivated");
 		return QDF_STATUS_E_ALREADY;
