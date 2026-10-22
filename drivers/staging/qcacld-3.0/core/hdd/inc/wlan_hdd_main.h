@@ -1567,6 +1567,22 @@ enum driver_modules_status {
 };
 
 /**
+ * enum hdd_stop_phase: Progress of a module stop
+ * @HDD_STOP_NONE: No stop in progress
+ * @HDD_STOP_PREPARED: Local features and policy are deinitialized
+ * @HDD_STOP_CDS_DISABLED: CDS is disabled
+ * @HDD_STOP_IPA_DEINIT_DONE: IPA uC offload is deinitialized
+ * @HDD_STOP_QUIESCED: CDS is post-disabled
+ */
+enum hdd_stop_phase {
+	HDD_STOP_NONE,
+	HDD_STOP_PREPARED,
+	HDD_STOP_CDS_DISABLED,
+	HDD_STOP_IPA_DEINIT_DONE,
+	HDD_STOP_QUIESCED,
+};
+
+/**
  * struct acs_dfs_policy - Define ACS policies
  * @acs_dfs_mode: Dfs mode enabled/disabled.
  * @acs_channel: pre defined channel to avoid ACS.
@@ -1720,6 +1736,7 @@ struct hdd_fw_ver_info {
  * @psoc_idle_timeout_work: delayed work for psoc idle shutdown
  * @dynamic_nss_chains_support: Per vdev dynamic nss chains update capability
  * @sar_cmd_params: SAR command params to be configured to the FW
+ * @stop_phase: Progress through a resumable module stop
  */
 struct hdd_context {
 	struct wlan_objmgr_psoc *psoc;
@@ -1916,6 +1933,7 @@ struct hdd_context {
 #endif
 	/* Present state of driver cds modules */
 	enum driver_modules_status driver_status;
+	enum hdd_stop_phase stop_phase;
 	struct qdf_delayed_work psoc_idle_timeout_work;
 	bool rps;
 	bool dynamic_rps;
@@ -2786,7 +2804,7 @@ int hdd_wlan_startup(struct hdd_context *hdd_ctx);
  *
  * Return: None
  */
-void hdd_wlan_exit(struct hdd_context *hdd_ctx);
+int hdd_wlan_exit(struct hdd_context *hdd_ctx);
 
 /**
  * hdd_psoc_create_vdevs() - create the default vdevs for a psoc

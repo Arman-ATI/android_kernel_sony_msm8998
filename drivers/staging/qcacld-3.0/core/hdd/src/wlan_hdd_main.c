@@ -3479,6 +3479,12 @@ int hdd_wlan_start_modules(struct hdd_context *hdd_ctx, bool reinit)
 		return -EINVAL;
 	}
 
+	if (hdd_ctx->stop_phase != HDD_STOP_NONE) {
+		hdd_err("WLAN stop incomplete; phase:%d", hdd_ctx->stop_phase);
+		hdd_exit();
+		return -EAGAIN;
+	}
+
 	hdd_psoc_idle_timer_stop(hdd_ctx);
 
 	if (hdd_ctx->driver_status == DRIVER_MODULES_ENABLED) {
@@ -8278,9 +8284,10 @@ static void wlan_hdd_cache_chann_mutex_destroy(struct hdd_context *hdd_ctx)
 }
 #endif
 
-void hdd_wlan_exit(struct hdd_context *hdd_ctx)
+int hdd_wlan_exit(struct hdd_context *hdd_ctx)
 {
 	struct wiphy *wiphy = hdd_ctx->wiphy;
+	int ret;
 
 	hdd_enter();
 
@@ -8326,7 +8333,11 @@ void hdd_wlan_exit(struct hdd_context *hdd_ctx)
 
 	qdf_dp_trace_deinit();
 
-	hdd_wlan_stop_modules(hdd_ctx, false);
+	ret = hdd_wlan_stop_modules(hdd_ctx, false);
+	if (ret) {
+		hdd_err("Failed to stop modules; errno:%d", ret);
+		return ret;
+	}
 
 	hdd_driver_memdump_deinit();
 
@@ -8361,6 +8372,8 @@ void hdd_wlan_exit(struct hdd_context *hdd_ctx)
 #ifdef FEATURE_WLAN_CH_AVOID
 	mutex_destroy(&hdd_ctx->avoid_freq_lock);
 #endif
+
+	return 0;
 }
 
 /**
@@ -10507,6 +10520,9 @@ int hdd_trigger_psoc_idle_restart(struct hdd_context *hdd_ctx)
 
 	QDF_BUG(rtnl_is_locked());
 
+	if (hdd_ctx->stop_phase != HDD_STOP_NONE)
+		return -EAGAIN;
+
 	hdd_psoc_idle_timer_stop(hdd_ctx);
 	if (hdd_ctx->driver_status == DRIVER_MODULES_ENABLED) {
 		hdd_nofl_debug("Driver modules already Enabled");
@@ -12564,25 +12580,41 @@ static int hdd_deconfigure_cds(struct hdd_context *hdd_ctx)
 
 	hdd_enter();
 
-	/* De-init features */
-	hdd_features_deinit(hdd_ctx);
+	if (hdd_ctx->stop_phase == HDD_STOP_NONE) {
+		/* De-init features */
+		hdd_features_deinit(hdd_ctx);
 
-	qdf_status = policy_mgr_deregister_mode_change_cb(hdd_ctx->psoc);
-	if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-		hdd_debug("Failed to deregister mode change cb with Policy Manager");
+		qdf_status =
+			policy_mgr_deregister_mode_change_cb(hdd_ctx->psoc);
+		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
+			hdd_debug("Failed to deregister mode change cb with Policy Manager");
 
-	qdf_status = cds_disable(hdd_ctx->psoc);
-	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
-		hdd_err("Failed to Disable the CDS Modules! :%d",
-			qdf_status);
-		ret = -EINVAL;
+		hdd_ctx->stop_phase = HDD_STOP_PREPARED;
 	}
 
-	if (ucfg_ipa_uc_ol_deinit(hdd_ctx->pdev) != QDF_STATUS_SUCCESS) {
-		hdd_err("Failed to disconnect pipes");
-		ret = -EINVAL;
+	if (hdd_ctx->stop_phase < HDD_STOP_CDS_DISABLED) {
+		qdf_status = cds_disable(hdd_ctx->psoc);
+		if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
+			hdd_err("Failed to Disable the CDS Modules! :%d",
+				qdf_status);
+			ret = -EAGAIN;
+			goto out;
+		}
+
+		hdd_ctx->stop_phase = HDD_STOP_CDS_DISABLED;
 	}
 
+	if (hdd_ctx->stop_phase < HDD_STOP_IPA_DEINIT_DONE) {
+		if (ucfg_ipa_uc_ol_deinit(hdd_ctx->pdev) != QDF_STATUS_SUCCESS) {
+			hdd_err("Failed to disconnect pipes");
+			ret = -EAGAIN;
+			goto out;
+		}
+
+		hdd_ctx->stop_phase = HDD_STOP_IPA_DEINIT_DONE;
+	}
+
+out:
 	hdd_exit();
 	return ret;
 }
@@ -12637,10 +12669,12 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 		}
 	}
 
-	hdd_deregister_policy_manager_callback(hdd_ctx->psoc);
+	if (hdd_ctx->stop_phase == HDD_STOP_NONE) {
+		hdd_deregister_policy_manager_callback(hdd_ctx->psoc);
 
-	/* free user wowl patterns */
-	hdd_free_user_wowl_ptrns();
+		/* free user wowl patterns */
+		hdd_free_user_wowl_ptrns();
+	}
 
 	switch (hdd_ctx->driver_status) {
 	case DRIVER_MODULES_UNINITIALIZED:
@@ -12660,15 +12694,18 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 		if (hdd_get_conparam() == QDF_GLOBAL_EPPING_MODE)
 			break;
 
-		wlan_hdd_deinit_tx_rx_histogram(hdd_ctx);
+		if (hdd_ctx->stop_phase == HDD_STOP_NONE) {
+			wlan_hdd_deinit_tx_rx_histogram(hdd_ctx);
 
-		hdd_skip_acs_scan_timer_deinit(hdd_ctx);
+			hdd_skip_acs_scan_timer_deinit(hdd_ctx);
 
-		hdd_disable_power_management(hdd_ctx);
+			hdd_disable_power_management(hdd_ctx);
+		}
+
 		if (hdd_deconfigure_cds(hdd_ctx)) {
 			hdd_err("Failed to de-configure CDS");
-			QDF_ASSERT(0);
-			ret = -EINVAL;
+			ret = -EAGAIN;
+			goto done;
 		}
 		hdd_debug("successfully Disabled the CDS modules!");
 
@@ -12680,19 +12717,23 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 		goto done;
 	}
 
-	hdd_destroy_sysfs_files();
 	hdd_debug("Closing CDS modules!");
 
 	if (hdd_get_conparam() != QDF_GLOBAL_EPPING_MODE) {
-		wma_release_pending_vdev_refs();
-		qdf_status = cds_post_disable();
-		if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
-			hdd_err("Failed to process post CDS disable! :%d",
-				qdf_status);
-			ret = -EINVAL;
-			QDF_ASSERT(0);
+		if (hdd_ctx->stop_phase < HDD_STOP_QUIESCED) {
+			wma_release_pending_vdev_refs();
+			qdf_status = cds_post_disable();
+			if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
+				hdd_err("Failed to process post CDS disable! :%d",
+					qdf_status);
+				ret = -EAGAIN;
+				goto done;
+			}
+
+			hdd_ctx->stop_phase = HDD_STOP_QUIESCED;
 		}
 
+		hdd_destroy_sysfs_files();
 		hdd_unregister_notifiers(hdd_ctx);
 		/* De-register the SME callbacks */
 		hdd_deregister_cb(hdd_ctx);
@@ -12785,6 +12826,7 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 
 	/* Once the firmware sequence is completed reset this flag */
 	hdd_ctx->imps_enabled = false;
+	hdd_ctx->stop_phase = HDD_STOP_NONE;
 	hdd_ctx->driver_status = DRIVER_MODULES_CLOSED;
 	hdd_debug("Wlan transitioned (now CLOSED)");
 
@@ -13203,6 +13245,7 @@ int hdd_wlan_startup(struct hdd_context *hdd_ctx)
 {
 	QDF_STATUS status;
 	int errno;
+	int stop_errno;
 	bool is_imps_enabled;
 
 	hdd_enter();
@@ -13285,7 +13328,10 @@ unregister_wiphy:
 	wiphy_unregister(hdd_ctx->wiphy);
 
 stop_modules:
-	hdd_wlan_stop_modules(hdd_ctx, false);
+	stop_errno = hdd_wlan_stop_modules(hdd_ctx, false);
+	if (stop_errno)
+		panic("wlan: incomplete IPA teardown during startup: %d",
+		      stop_errno);
 
 memdump_deinit:
 	hdd_driver_memdump_deinit();

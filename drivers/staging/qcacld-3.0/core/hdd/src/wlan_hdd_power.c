@@ -1382,7 +1382,10 @@ QDF_STATUS hdd_wlan_shutdown(void)
 	/* De-register the HDD callbacks */
 	hdd_deregister_cb(hdd_ctx);
 
-	hdd_wlan_stop_modules(hdd_ctx, false);
+	if (hdd_wlan_stop_modules(hdd_ctx, false)) {
+		hdd_err("Failed to stop modules");
+		return QDF_STATUS_E_BUSY;
+	}
 
 	hdd_lpass_notify_stop(hdd_ctx);
 

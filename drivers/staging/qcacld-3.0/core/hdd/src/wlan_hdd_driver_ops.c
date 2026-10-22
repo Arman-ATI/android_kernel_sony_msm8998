@@ -473,6 +473,7 @@ static int __hdd_soc_probe(struct device *dev,
 	struct hdd_context *hdd_ctx;
 	QDF_STATUS status;
 	int errno;
+	int ret;
 
 	hdd_info("probing driver");
 
@@ -511,7 +512,9 @@ static int __hdd_soc_probe(struct device *dev,
 	return 0;
 
 wlan_exit:
-	hdd_wlan_exit(hdd_ctx);
+	ret = hdd_wlan_exit(hdd_ctx);
+	if (ret)
+		panic("wlan: incomplete IPA teardown during probe: %d", ret);
 
 hdd_context_destroy:
 	hdd_context_destroy(hdd_ctx);
@@ -668,6 +671,7 @@ static int hdd_soc_recovery_reinit(struct device *dev,
 static void __hdd_soc_remove(struct device *dev)
 {
 	struct hdd_context *hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
+	int ret;
 
 	QDF_BUG(hdd_ctx);
 	if (!hdd_ctx)
@@ -682,11 +686,13 @@ static void __hdd_soc_remove(struct device *dev)
 	if (!hdd_wait_for_debugfs_threads_completion())
 		hdd_warn("Debugfs threads are still active attempting driver unload anyway");
 
-	if (hdd_get_conparam() == QDF_GLOBAL_EPPING_MODE) {
-		hdd_wlan_stop_modules(hdd_ctx, false);
-	} else {
-		hdd_wlan_exit(hdd_ctx);
-	}
+	if (hdd_get_conparam() == QDF_GLOBAL_EPPING_MODE)
+		ret = hdd_wlan_stop_modules(hdd_ctx, false);
+	else
+		ret = hdd_wlan_exit(hdd_ctx);
+
+	if (ret)
+		panic("wlan: incomplete IPA teardown during remove: %d", ret);
 
 	hdd_context_destroy(hdd_ctx);
 
@@ -815,6 +821,7 @@ static void hdd_soc_recovery_cleanup(void)
 static void __hdd_soc_recovery_shutdown(void)
 {
 	struct hdd_context *hdd_ctx;
+	QDF_STATUS status;
 	void *hif_ctx;
 
 	/* recovery starts via firmware down indication; ensure we got one */
@@ -850,7 +857,10 @@ static void __hdd_soc_recovery_shutdown(void)
 
 	if (!QDF_IS_EPPING_ENABLED(cds_get_conparam())) {
 		hif_disable_isr(hif_ctx);
-		hdd_wlan_shutdown();
+		status = hdd_wlan_shutdown();
+		if (QDF_IS_STATUS_ERROR(status))
+			panic("wlan: incomplete IPA teardown during recovery: %d",
+			      status);
 	}
 }
 
