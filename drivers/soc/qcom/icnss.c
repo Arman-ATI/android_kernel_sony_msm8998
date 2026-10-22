@@ -1324,6 +1324,9 @@ static int icnss_driver_event_register_driver(void *data)
 	int ret = 0;
 	int probe_cnt = 0;
 
+	if (test_bit(ICNSS_REMOVING, &penv->state))
+		return -ENODEV;
+
 	if (penv->ops)
 		return -EEXIST;
 
@@ -1375,6 +1378,9 @@ out:
 
 static int icnss_driver_event_unregister_driver(void *data)
 {
+	if (!penv->ops)
+		return 0;
+
 	if (!test_bit(ICNSS_DRIVER_PROBED, &penv->state)) {
 		penv->ops = NULL;
 		goto out;
@@ -2065,6 +2071,9 @@ int __icnss_register_driver(struct icnss_driver_ops *ops,
 	}
 
 	icnss_pr_dbg("Registering driver, state: 0x%lx\n", penv->state);
+
+	if (test_bit(ICNSS_REMOVING, &penv->state))
+		return -ENODEV;
 
 	if (penv->ops) {
 		icnss_pr_err("Driver already registered\n");
@@ -3075,6 +3084,9 @@ static int icnss_stats_show_state(struct seq_file *s, struct icnss_priv *priv)
 		case ICNSS_DRIVER_UNLOADING:
 			seq_puts(s, "DRIVER UNLOADING");
 			continue;
+		case ICNSS_REMOVING:
+			seq_puts(s, "REMOVING");
+			continue;
 		case ICNSS_REJUVENATE:
 			seq_puts(s, "FW REJUVENATE");
 			continue;
@@ -3916,7 +3928,17 @@ out:
 
 static int icnss_remove(struct platform_device *pdev)
 {
+	int ret;
+
 	icnss_pr_info("Removing driver: state: 0x%lx\n", penv->state);
+
+	set_bit(ICNSS_REMOVING, &penv->state);
+
+	ret = icnss_driver_event_post(ICNSS_DRIVER_EVENT_UNREGISTER_DRIVER,
+				      ICNSS_EVENT_SYNC_UNINTERRUPTIBLE, NULL);
+	if (ret || READ_ONCE(penv->ops) ||
+	    test_bit(ICNSS_DRIVER_PROBED, &penv->state))
+		panic("icnss: WLAN child removal incomplete: %d", ret);
 
 	device_init_wakeup(&penv->pdev->dev, false);
 
