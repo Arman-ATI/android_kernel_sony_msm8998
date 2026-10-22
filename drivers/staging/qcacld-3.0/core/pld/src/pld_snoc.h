@@ -255,7 +255,8 @@ static inline int pld_snoc_smmu_map(struct device *dev, phys_addr_t paddr,
 	return icnss_smmu_map(dev, paddr, iova_addr, size);
 }
 
-#ifdef CONFIG_SMMU_S1_UNMAP
+#if defined(CONFIG_SMMU_S1_UNMAP) || \
+	(defined(CONFIG_ARCH_MSM8998) && defined(IPA_OFFLOAD))
 static inline int pld_snoc_smmu_unmap(struct device *dev,
 				      uint32_t iova_addr, size_t size)
 {

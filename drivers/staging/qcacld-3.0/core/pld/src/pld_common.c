@@ -1762,7 +1762,8 @@ int pld_smmu_map(struct device *dev, phys_addr_t paddr,
 	return ret;
 }
 
-#ifdef CONFIG_SMMU_S1_UNMAP
+#if defined(CONFIG_SMMU_S1_UNMAP) || \
+	(defined(CONFIG_ARCH_MSM8998) && defined(IPA_OFFLOAD))
 /**
  * pld_smmu_unmap() - Unmap SMMU
  * @dev: device

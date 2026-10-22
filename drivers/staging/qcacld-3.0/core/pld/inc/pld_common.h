@@ -638,7 +638,8 @@ void *pld_smmu_get_mapping(struct device *dev);
 #endif
 int pld_smmu_map(struct device *dev, phys_addr_t paddr,
 		 uint32_t *iova_addr, size_t size);
-#ifdef CONFIG_SMMU_S1_UNMAP
+#if defined(CONFIG_SMMU_S1_UNMAP) || \
+	(defined(CONFIG_ARCH_MSM8998) && defined(IPA_OFFLOAD))
 int pld_smmu_unmap(struct device *dev,
 		   uint32_t iova_addr, size_t size);
 #else
