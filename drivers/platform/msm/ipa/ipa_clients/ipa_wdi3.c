@@ -49,6 +49,12 @@ struct ipa_wdi_intf_info {
 	struct list_head link;
 };
 
+enum ipa_wdi_pipe_state {
+	IPA_WDI_PIPE_DISABLED,
+	IPA_WDI_PIPE_SUSPENDED,
+	IPA_WDI_PIPE_ACTIVE,
+};
+
 struct ipa_wdi_context {
 	struct list_head head_intf_list;
 	struct completion wdi_completion;
@@ -64,6 +70,8 @@ struct ipa_wdi_context {
 	u8 sys_pipe_teardown_idx;
 	u8 tx_pipe_owned;
 	u8 rx_pipe_owned;
+	enum ipa_wdi_pipe_state tx_state;
+	enum ipa_wdi_pipe_state rx_state;
 	u8 rm_dep_owned;
 	u8 rm_prod_owned;
 	u8 rm_cons_owned;
@@ -913,6 +921,74 @@ int ipa_wdi_disconn_pipes(void)
 }
 EXPORT_SYMBOL(ipa_wdi_disconn_pipes);
 
+static int ipa_wdi_pipe_up(u32 handle, enum ipa_wdi_pipe_state *state)
+{
+	int ret;
+
+	if (*state == IPA_WDI_PIPE_DISABLED) {
+		ret = ipa_enable_wdi_pipe(handle);
+		if (ret) {
+			IPA_WDI_ERR("fail to enable pipe 0x%x, %d\n",
+					handle, ret);
+			return ret;
+		}
+		*state = IPA_WDI_PIPE_SUSPENDED;
+	}
+
+	if (*state == IPA_WDI_PIPE_SUSPENDED) {
+		ret = ipa_resume_wdi_pipe(handle);
+		if (ret) {
+			IPA_WDI_ERR("fail to resume pipe 0x%x, %d\n",
+					handle, ret);
+			return ret;
+		}
+		*state = IPA_WDI_PIPE_ACTIVE;
+	}
+
+	return 0;
+}
+
+static int ipa_wdi_pipe_down(u32 handle, enum ipa_wdi_pipe_state *state)
+{
+	int ret;
+
+	if (*state == IPA_WDI_PIPE_ACTIVE) {
+		ret = ipa_suspend_wdi_pipe(handle);
+		if (ret) {
+			IPA_WDI_ERR("fail to suspend pipe 0x%x, %d\n",
+					handle, ret);
+			return ret;
+		}
+		*state = IPA_WDI_PIPE_SUSPENDED;
+	}
+
+	if (*state == IPA_WDI_PIPE_SUSPENDED) {
+		ret = ipa_disable_wdi_pipe(handle);
+		if (ret) {
+			IPA_WDI_ERR("fail to disable pipe 0x%x, %d\n",
+					handle, ret);
+			return ret;
+		}
+		*state = IPA_WDI_PIPE_DISABLED;
+	}
+
+	return 0;
+}
+
+static int ipa_wdi_rollback_pipes(int err)
+{
+	int rx_ret, tx_ret;
+
+	rx_ret = ipa_wdi_pipe_down(ipa_wdi_ctx->rx_pipe_hdl,
+				   &ipa_wdi_ctx->rx_state);
+	tx_ret = ipa_wdi_pipe_down(ipa_wdi_ctx->tx_pipe_hdl,
+				   &ipa_wdi_ctx->tx_state);
+	if (rx_ret || tx_ret)
+		return -EUCLEAN;
+
+	return err;
+}
+
 int ipa_wdi_enable_pipes(void)
 {
 	int ret;
@@ -942,22 +1018,14 @@ int ipa_wdi_enable_pipes(void)
 			return -EFAULT;
 		}
 	} else {
-		if (ipa_enable_wdi_pipe(ipa_wdi_ctx->tx_pipe_hdl)) {
-			IPA_WDI_ERR("fail to enable wdi tx pipe\n");
-			return -EFAULT;
-		}
-		if (ipa_resume_wdi_pipe(ipa_wdi_ctx->tx_pipe_hdl)) {
-			IPA_WDI_ERR("fail to resume wdi tx pipe\n");
-			return -EFAULT;
-		}
-		if (ipa_enable_wdi_pipe(ipa_wdi_ctx->rx_pipe_hdl)) {
-			IPA_WDI_ERR("fail to enable wdi rx pipe\n");
-			return -EFAULT;
-		}
-		if (ipa_resume_wdi_pipe(ipa_wdi_ctx->rx_pipe_hdl)) {
-			IPA_WDI_ERR("fail to resume wdi rx pipe\n");
-			return -EFAULT;
-		}
+		ret = ipa_wdi_pipe_up(ipa_wdi_ctx->tx_pipe_hdl,
+				      &ipa_wdi_ctx->tx_state);
+		if (ret)
+			return ipa_wdi_rollback_pipes(ret);
+		ret = ipa_wdi_pipe_up(ipa_wdi_ctx->rx_pipe_hdl,
+				      &ipa_wdi_ctx->rx_state);
+		if (ret)
+			return ipa_wdi_rollback_pipes(ret);
 	}
 
 	if (!ipa_pm_is_used()) {
@@ -966,21 +1034,27 @@ int ipa_wdi_enable_pipes(void)
 			if (wait_for_completion_timeout(
 				&ipa_wdi_ctx->wdi_completion, 10*HZ) == 0) {
 				IPA_WDI_ERR("WLAN_PROD res req time out\n");
-				return -EFAULT;
+				goto fail_pipes;
 			}
 		} else if (ret != 0) {
 			IPA_WDI_ERR("fail to request resource\n");
-			return -EFAULT;
+			goto fail_pipes;
 		}
 	} else {
 		ret = ipa_pm_activate_sync(ipa_wdi_ctx->ipa_pm_hdl);
 		if (ret) {
 			IPA_WDI_ERR("fail to activate ipa pm\n");
-			return -EFAULT;
+			goto fail_pipes;
 		}
 	}
 
 	return 0;
+
+fail_pipes:
+	if (ipa_wdi_ctx->wdi_version != IPA_WDI_3)
+		return ipa_wdi_rollback_pipes(-EFAULT);
+
+	return -EFAULT;
 }
 EXPORT_SYMBOL(ipa_wdi_enable_pipes);
 
@@ -1013,20 +1087,11 @@ int ipa_wdi_disable_pipes(void)
 			return -EFAULT;
 		}
 	} else {
-		if (ipa_suspend_wdi_pipe(ipa_wdi_ctx->tx_pipe_hdl)) {
-			IPA_WDI_ERR("fail to suspend wdi tx pipe\n");
-			return -EFAULT;
-		}
-		if (ipa_disable_wdi_pipe(ipa_wdi_ctx->tx_pipe_hdl)) {
-			IPA_WDI_ERR("fail to disable wdi tx pipe\n");
-			return -EFAULT;
-		}
-		if (ipa_suspend_wdi_pipe(ipa_wdi_ctx->rx_pipe_hdl)) {
-			IPA_WDI_ERR("fail to suspend wdi rx pipe\n");
-			return -EFAULT;
-		}
-		if (ipa_disable_wdi_pipe(ipa_wdi_ctx->rx_pipe_hdl)) {
-			IPA_WDI_ERR("fail to disable wdi rx pipe\n");
+		if (ipa_wdi_pipe_down(ipa_wdi_ctx->rx_pipe_hdl,
+				      &ipa_wdi_ctx->rx_state) ||
+		    ipa_wdi_pipe_down(ipa_wdi_ctx->tx_pipe_hdl,
+				      &ipa_wdi_ctx->tx_state)) {
+			IPA_WDI_ERR("fail to bring wdi pipes down\n");
 			return -EFAULT;
 		}
 	}

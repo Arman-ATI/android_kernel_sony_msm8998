@@ -842,6 +842,9 @@ QDF_STATUS ol_txrx_ipa_enable_pipes(struct cdp_pdev *ppdev)
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			  "%s: ipa_wdi_enable_pipes failed: ret=%d",
 				__func__, ret);
+		if (ret == -EUCLEAN)
+			panic("wlan: incomplete IPA rollback during enable: %d",
+			      ret);
 		status = htt_rx_update_smmu_map(pdev->htt_pdev, false);
 		if (status != QDF_STATUS_SUCCESS)
 			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
