@@ -954,14 +954,18 @@ htt_rx_offload_paddr_msdu_pop_ll(htt_pdev_handle pdev,
 	uint32_t *msdu_hdr, msdu_len;
 	uint32_t *curr_msdu;
 	qdf_dma_addr_t paddr;
+	bool found;
 
 	curr_msdu =
 		msg_word + (msdu_iter * HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORDS);
 	paddr = htt_rx_in_ord_paddr_get(curr_msdu);
-	*head_buf = *tail_buf = buf = htt_rx_in_order_netbuf_pop(pdev, paddr);
+	found = false;
+	*head_buf = *tail_buf = buf = htt_rx_in_order_netbuf_pop(pdev, paddr,
+							&found);
 
 	if (qdf_unlikely(!buf)) {
-		qdf_print("netbuf pop failed!");
+		if (!found)
+			qdf_print("netbuf pop failed!");
 		return 1;
 	}
 	qdf_nbuf_set_pktlen(buf, HTT_RX_BUF_SIZE);
@@ -1155,12 +1159,14 @@ hli_end:
  *  paddr is already stripped off of higher marking bits.
  */
 qdf_nbuf_t htt_rx_hash_list_lookup(struct htt_pdev_t *pdev,
-				   qdf_dma_addr_t     paddr)
+				   qdf_dma_addr_t paddr, bool *found)
 {
 	uint32_t i;
 	struct htt_list_node *list_iter = NULL;
 	qdf_nbuf_t netbuf = NULL;
 	struct htt_rx_hash_entry *hash_entry;
+
+	*found = false;
 
 	qdf_spin_lock_bh(&pdev->rx_ring.rx_hash_lock);
 
@@ -1180,6 +1186,7 @@ qdf_nbuf_t htt_rx_hash_list_lookup(struct htt_pdev_t *pdev,
 
 		if (hash_entry->paddr == paddr) {
 			/* Found the entry corresponding to paddr */
+			*found = true;
 			netbuf = hash_entry->netbuf;
 			/* set netbuf to NULL to trace if freed entry
 			 * is getting unmapped in hash deinit.
@@ -1415,9 +1422,11 @@ htt_rx_amsdu_rx_in_order_pop_ll(htt_pdev_handle pdev,
 	qdf_mem_info_t mem_map_table = {0};
 	int ret = 1;
 	bool ipa_smmu = false;
+	bool found;
 
 	HTT_ASSERT1(htt_rx_in_order_ring_elems(pdev) != 0);
 
+	*replenish_cnt = 0;
 	rx_ind_data = qdf_nbuf_data(rx_ind_msg);
 	rx_ctx_id = QDF_NBUF_CB_RX_CTX_ID(rx_ind_msg);
 	msg_word = (uint32_t *)rx_ind_data;
@@ -1449,13 +1458,22 @@ htt_rx_amsdu_rx_in_order_pop_ll(htt_pdev_handle pdev,
 	}
 
 	paddr = htt_rx_in_ord_paddr_get(msg_word);
-	(*head_msdu) = msdu = htt_rx_in_order_netbuf_pop(pdev, paddr);
+	found = false;
+	(*head_msdu) = msdu = htt_rx_in_order_netbuf_pop(pdev, paddr, &found);
+	if (found)
+		(*replenish_cnt)++;
 
 	if (qdf_unlikely(!msdu)) {
-		qdf_print("netbuf pop failed!");
-		*tail_msdu = NULL;
-		pdev->rx_ring.pop_fail_cnt++;
-		ret = 0;
+		if (!found) {
+			qdf_print("netbuf pop failed!");
+			pdev->rx_ring.pop_fail_cnt++;
+			*tail_msdu = NULL;
+			ret = 0;
+		} else {
+			*head_msdu = NULL;
+			*tail_msdu = NULL;
+			ret = 1;
+		}
 		goto end;
 	}
 
@@ -1495,12 +1513,24 @@ htt_rx_amsdu_rx_in_order_pop_ll(htt_pdev_handle pdev,
 				/* get the next msdu */
 				msg_word += HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORDS;
 				paddr = htt_rx_in_ord_paddr_get(msg_word);
-				next = htt_rx_in_order_netbuf_pop(pdev, paddr);
+				found = false;
+				next = htt_rx_in_order_netbuf_pop(pdev, paddr,
+								 &found);
+				if (found)
+					(*replenish_cnt)++;
 				if (qdf_unlikely(!next)) {
-					qdf_print("netbuf pop failed!");
-					*tail_msdu = NULL;
-					pdev->rx_ring.pop_fail_cnt++;
-					ret = 0;
+					if (!found) {
+						qdf_print("netbuf pop failed!");
+						pdev->rx_ring.pop_fail_cnt++;
+						*tail_msdu = NULL;
+						ret = 0;
+					} else if (prev) {
+						*tail_msdu = prev;
+						qdf_nbuf_set_next(prev, NULL);
+					} else {
+						*head_msdu = NULL;
+						*tail_msdu = NULL;
+					}
 					goto end;
 				}
 				/* if this is not the first msdu, update the
@@ -1595,12 +1625,24 @@ htt_rx_amsdu_rx_in_order_pop_ll(htt_pdev_handle pdev,
 				/* get the next msdu */
 				msg_word += HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORDS;
 				paddr = htt_rx_in_ord_paddr_get(msg_word);
-				next = htt_rx_in_order_netbuf_pop(pdev, paddr);
+				found = false;
+				next = htt_rx_in_order_netbuf_pop(pdev, paddr,
+								 &found);
+				if (found)
+					(*replenish_cnt)++;
 				if (qdf_unlikely(!next)) {
-					qdf_print("netbuf pop failed!");
-					*tail_msdu = NULL;
-					pdev->rx_ring.pop_fail_cnt++;
-					ret = 0;
+					if (!found) {
+						qdf_print("netbuf pop failed!");
+						pdev->rx_ring.pop_fail_cnt++;
+						*tail_msdu = NULL;
+						ret = 0;
+					} else if (prev) {
+						*tail_msdu = prev;
+						qdf_nbuf_set_next(prev, NULL);
+					} else {
+						*head_msdu = NULL;
+						*tail_msdu = NULL;
+					}
 					goto end;
 				}
 
@@ -1623,12 +1665,20 @@ htt_rx_amsdu_rx_in_order_pop_ll(htt_pdev_handle pdev,
 		if (msdu_count) {
 			msg_word += HTT_RX_IN_ORD_PADDR_IND_MSDU_DWORDS;
 			paddr = htt_rx_in_ord_paddr_get(msg_word);
-			next = htt_rx_in_order_netbuf_pop(pdev, paddr);
+			found = false;
+			next = htt_rx_in_order_netbuf_pop(pdev, paddr, &found);
+			if (found)
+				(*replenish_cnt)++;
 			if (qdf_unlikely(!next)) {
-				qdf_print("netbuf pop failed!");
-				*tail_msdu = NULL;
-				pdev->rx_ring.pop_fail_cnt++;
-				ret = 0;
+				if (!found) {
+					qdf_print("netbuf pop failed!");
+					pdev->rx_ring.pop_fail_cnt++;
+					*tail_msdu = NULL;
+					ret = 0;
+				} else {
+					*tail_msdu = msdu;
+					qdf_nbuf_set_next(msdu, NULL);
+				}
 				goto end;
 			}
 			qdf_nbuf_set_next(msdu, next);
