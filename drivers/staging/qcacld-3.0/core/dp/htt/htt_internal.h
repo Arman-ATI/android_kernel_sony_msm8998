@@ -556,12 +556,18 @@ int htt_rx_attach(struct htt_pdev_t *pdev);
 
 #if defined(CONFIG_HL_SUPPORT)
 
+static inline int htt_rx_wdi_drain_mappings(struct htt_pdev_t *pdev)
+{
+	return 0;
+}
+
 static inline int htt_rx_detach(struct htt_pdev_t *pdev)
 {
 	return 0;
 }
 #else
 
+int htt_rx_wdi_drain_mappings(struct htt_pdev_t *pdev);
 int htt_rx_detach(struct htt_pdev_t *pdev);
 #endif
 

@@ -97,11 +97,16 @@ enum htt_rx_wdi_owner_state {
 	HTT_RX_WDI_FREE,
 	HTT_RX_WDI_RESERVED,
 	HTT_RX_WDI_POSTED,
+	HTT_RX_WDI_PENDING,
 };
 
 struct htt_rx_wdi_owner {
 	struct htt_list_node node;
 	qdf_nbuf_t netbuf;
+	phys_addr_t pa;
+	unsigned long iova;
+	unsigned long mapped;
+	uint8_t nr_pages;
 	uint8_t state;
 };
 
@@ -392,7 +397,9 @@ struct htt_pdev_t {
 		struct htt_rx_wdi_owner *wdi_owners;
 		struct htt_rx_wdi_owner **wdi_owners_ring;
 		struct htt_list_node wdi_owner_free;
+		struct htt_list_node wdi_owner_pending;
 		qdf_spinlock_t wdi_owner_lock;
+		bool wdi_draining;
 	} rx_ring;
 
 #ifndef CONFIG_HL_SUPPORT
