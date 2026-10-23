@@ -715,6 +715,10 @@ void htt_detach(htt_pdev_handle pdev)
 {
 	int ret;
 
+	ret = htt_ipa_uc_drain_mappings(pdev);
+	if (ret)
+		panic("htt: incomplete IPA mapping teardown: %d", ret);
+
 	ret = htt_rx_detach(pdev);
 	if (ret)
 		panic("htt: incomplete IPA mapping teardown: %d", ret);
@@ -906,6 +910,15 @@ int htt_ipa_uc_smmu_page(struct htt_pdev_t *pdev, phys_addr_t pa,
 	return info.result == PAGE_SIZE ? 0 : -EIO;
 }
 
+int htt_ipa_uc_drain_mappings(struct htt_pdev_t *pdev)
+{
+	if (htt_rx_wdi_drain_mappings(pdev))
+		return -EIO;
+	if (htt_tx_ipa_uc_drain_mappings(pdev))
+		return -EIO;
+	return 0;
+}
+
 /**
  * htt_ipa_uc_attach() - Allocate UC data path resources
  * @pdev: handle to the HTT instance
@@ -970,7 +983,10 @@ void htt_ipa_uc_detach(struct htt_pdev_t *pdev)
 	QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_DEBUG, "%s: enter",
 		__func__);
 
-	/* TX IPA micro controller detach */
+	ret = htt_ipa_uc_drain_mappings(pdev);
+	if (ret)
+		panic("htt: incomplete IPA mapping teardown: %d", ret);
+
 	ret = htt_tx_ipa_uc_detach(pdev);
 	if (ret)
 		panic("htt: incomplete IPA mapping teardown: %d", ret);

@@ -299,21 +299,21 @@ static inline int cdp_pdev_post_attach(ol_txrx_soc_handle soc,
 	return soc->ops->cmn_drv_ops->txrx_pdev_post_attach(pdev);
 }
 
-static inline void
+static inline QDF_STATUS
 cdp_pdev_pre_detach(ol_txrx_soc_handle soc, struct cdp_pdev *pdev, int force)
 {
 	if (!soc || !soc->ops) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
 				"%s: Invalid Instance:", __func__);
 		QDF_BUG(0);
-		return;
+		return QDF_STATUS_E_INVAL;
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
 	    !soc->ops->cmn_drv_ops->txrx_pdev_pre_detach)
-		return;
+		return QDF_STATUS_SUCCESS;
 
-	soc->ops->cmn_drv_ops->txrx_pdev_pre_detach(pdev, force);
+	return soc->ops->cmn_drv_ops->txrx_pdev_pre_detach(pdev, force);
 }
 
 static inline void

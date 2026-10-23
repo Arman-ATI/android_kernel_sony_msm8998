@@ -3689,8 +3689,25 @@ int hdd_wlan_start_modules(struct hdd_context *hdd_ctx, bool reinit)
 	return 0;
 
 destroy_driver_sysfs:
+	/*
+	 * A failure after cds_pre_enable() attached the datapath quiesces and
+	 * pre-detaches it before any owner or context is freed; retained
+	 * mapping ownership must not be destroyed.
+	 */
 	hdd_destroy_sysfs_files();
-	cds_post_disable();
+	status = cds_post_disable();
+	if (QDF_IS_STATUS_ERROR(status)) {
+		hdd_err("Failed to process post CDS disable! :%d", status);
+		panic("wlan: incomplete IPA teardown during startup: %d",
+		      status);
+	}
+
+	status = cds_dp_pre_close();
+	if (QDF_IS_STATUS_ERROR(status)) {
+		hdd_err("Failed to pre-close the CDS datapath: %d", status);
+		panic("wlan: incomplete IPA teardown during startup: %d",
+		      status);
+	}
 
 unregister_notifiers:
 	hdd_unregister_notifiers(hdd_ctx);
@@ -12736,6 +12753,14 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 			}
 
 			hdd_ctx->stop_phase = HDD_STOP_QUIESCED;
+		}
+
+		qdf_status = cds_dp_pre_close();
+		if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
+			hdd_err("Failed to pre-close the CDS datapath: %d",
+				qdf_status);
+			ret = -EAGAIN;
+			goto done;
 		}
 
 		hdd_destroy_sysfs_files();

@@ -1145,6 +1145,26 @@ static int htt_tx_buf_pool_free(struct htt_pdev_t *pdev)
 	return ret;
 }
 
+int htt_tx_ipa_uc_drain_mappings(struct htt_pdev_t *pdev)
+{
+	struct htt_ipa_uc_tx_resource_t *rsc = &pdev->ipa_uc_tx_rsc;
+	uint32_t idx;
+
+	if (!rsc->tx_buf_pool_strg)
+		return 0;
+	if (rsc->alloc_tx_buf_cnt && !rsc->tx_buf_maps)
+		return -EIO;
+
+	for (idx = 0; idx < rsc->alloc_tx_buf_cnt; idx++) {
+		if (!rsc->tx_buf_pool_strg[idx])
+			continue;
+		if (htt_tx_ipa_uc_unmap_buffer(pdev, idx))
+			return -EIO;
+	}
+
+	return 0;
+}
+
 #ifdef QCA_WIFI_3_0
 /**
  * htt_tx_ipa_uc_wdi_tx_buf_alloc() - Alloc WDI TX buffers

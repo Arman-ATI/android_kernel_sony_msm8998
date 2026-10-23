@@ -1433,9 +1433,9 @@ static void ol_tx_free_descs_inuse(ol_txrx_pdev_handle pdev)
  * This function is used when the WLAN driver is being removed to
  * detach the host data component within the driver.
  *
- * Return: None
+ * Return: QDF status
  */
-static void ol_txrx_pdev_pre_detach(struct cdp_pdev *ppdev, int force)
+static QDF_STATUS ol_txrx_pdev_pre_detach(struct cdp_pdev *ppdev, int force)
 {
 	struct ol_txrx_pdev_t *pdev = (struct ol_txrx_pdev_t *)ppdev;
 
@@ -1444,6 +1444,15 @@ static void ol_txrx_pdev_pre_detach(struct cdp_pdev *ppdev, int force)
 
 	/* check that the pdev has no vdevs allocated */
 	TXRX_ASSERT1(TAILQ_EMPTY(&pdev->vdev_list));
+
+	/*
+	 * Drain IPA uC page ownership before the destructive teardown below.
+	 * A retained mapping forbids destruction, so the caller keeps the
+	 * datapath and retries instead.
+	 */
+	if (ol_cfg_ipa_uc_offload_enabled(pdev->ctrl_pdev) &&
+	    htt_ipa_uc_drain_mappings(pdev->htt_pdev))
+		return QDF_STATUS_E_BUSY;
 
 #ifdef QCA_SUPPORT_TX_THROTTLE
 	/* Thermal Mitigation */
@@ -1529,6 +1538,8 @@ static void ol_txrx_pdev_pre_detach(struct cdp_pdev *ppdev, int force)
 #ifdef QCA_COMPUTE_TX_DELAY
 	qdf_spinlock_destroy(&pdev->tx_delay.mutex);
 #endif
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**

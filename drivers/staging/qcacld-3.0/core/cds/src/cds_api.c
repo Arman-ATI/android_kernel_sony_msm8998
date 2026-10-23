@@ -1094,7 +1094,6 @@ QDF_STATUS cds_post_disable(void)
 {
 	tp_wma_handle wma_handle;
 	struct hif_opaque_softc *hif_ctx;
-	struct cdp_pdev *txrx_pdev;
 	struct scheduler_ctx *sched_ctx;
 	QDF_STATUS qdf_status;
 
@@ -1107,12 +1106,6 @@ QDF_STATUS cds_post_disable(void)
 	hif_ctx = cds_get_context(QDF_MODULE_ID_HIF);
 	if (!hif_ctx) {
 		cds_err("Failed to get hif_handle!");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	txrx_pdev = cds_get_context(QDF_MODULE_ID_TXRX);
-	if (!txrx_pdev) {
-		cds_err("Failed to get txrx pdev!");
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -1146,9 +1139,6 @@ QDF_STATUS cds_post_disable(void)
 		cds_err("Failed to close RX thread!");
 		return QDF_STATUS_E_INVAL;
 	}
-
-	cdp_pdev_pre_detach(cds_get_context(QDF_MODULE_ID_SOC),
-		       (struct cdp_pdev *)txrx_pdev, 1);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1238,6 +1228,24 @@ QDF_STATUS cds_close(struct wlan_objmgr_psoc *psoc)
 	qdf_timer_module_deinit();
 
 	cds_deregister_all_modules();
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS cds_dp_pre_close(void)
+{
+	QDF_STATUS status;
+
+	if (!gp_cds_context || !gp_cds_context->dp_soc ||
+	    !gp_cds_context->pdev_txrx_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	status = cdp_pdev_pre_detach(gp_cds_context->dp_soc,
+				     gp_cds_context->pdev_txrx_ctx, 1);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		cds_err("Failed to drain datapath mappings: %d", status);
+		return status;
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
