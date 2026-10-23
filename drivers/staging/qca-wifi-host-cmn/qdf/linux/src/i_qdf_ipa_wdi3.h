@@ -57,6 +57,9 @@ typedef struct ipa_wdi_init_out_params __qdf_ipa_wdi_init_out_params_t;
 	(((struct ipa_wdi_init_out_params *)(out_params))->is_uC_ready)
 #define __QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_ENABLED(out_params)	\
 	(((struct ipa_wdi_init_out_params *)(out_params))->is_smmu_enabled)
+
+#define __QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_IDENTITY(out_params)	\
+	(((struct ipa_wdi_init_out_params *)(out_params))->is_smmu_identity)
 #ifdef IPA_WDI3_GSI
 #define QDF_IPA_WDI_INIT_OUT_PARAMS_IS_OVER_GSI(out_params)	\
 	(((struct ipa_wdi_init_out_params *)(out_params))->is_over_gsi)

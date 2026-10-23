@@ -1363,10 +1363,12 @@ struct ipa_smmu_in_params {
  * struct  ipa_smmu_out_params - information provided to IPA client
  * @smmu_enable: IPA S1 SMMU enable/disable status
  * @shared_cb: is client CB shared (mappings should be done by client only)
+ * @identity_map: WLAN buffers are mapped at their own physical address
  */
 struct ipa_smmu_out_params {
 	bool smmu_enable;
 	bool shared_cb;
+	bool identity_map;
 };
 
 #if defined CONFIG_IPA || defined CONFIG_IPA3

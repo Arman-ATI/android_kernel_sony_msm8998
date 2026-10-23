@@ -927,13 +927,13 @@ void __qdf_ipa_set_meta_msg_type(__qdf_ipa_msg_meta_t *meta, int type);
  */
 static bool __qdf_get_ipa_smmu_enabled(void)
 {
-	struct ipa_smmu_in_params params_in;
-	struct ipa_smmu_out_params params_out;
+	struct ipa_smmu_in_params params_in = {
+		.smmu_client = IPA_SMMU_WLAN_CLIENT,
+	};
+	struct ipa_smmu_out_params params_out = {0};
 
-	params_in.smmu_client = IPA_SMMU_WLAN_CLIENT;
-	ipa_get_smmu_params(&params_in, &params_out);
-
-	return params_out.smmu_enable;
+	return !ipa_get_smmu_params(&params_in, &params_out) &&
+		params_out.smmu_enable;
 }
 #endif
 

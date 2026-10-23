@@ -110,10 +110,14 @@ int ipa_wdi_init(struct ipa_wdi_init_in_params *in,
 	out->is_uC_ready = uc_ready_params.is_uC_ready;
 
 	smmu_in.smmu_client = IPA_SMMU_WLAN_CLIENT;
-	if (ipa_get_smmu_params(&smmu_in, &smmu_out))
+	if (ipa_get_smmu_params(&smmu_in, &smmu_out)) {
 		out->is_smmu_enabled = false;
-	else
+		out->is_smmu_identity = false;
+	} else {
 		out->is_smmu_enabled = smmu_out.smmu_enable;
+		out->is_smmu_identity = smmu_out.smmu_enable &&
+			smmu_out.identity_map;
+	}
 
 	ipa_wdi_ctx->is_smmu_enabled = out->is_smmu_enabled;
 

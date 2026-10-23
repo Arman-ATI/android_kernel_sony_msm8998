@@ -488,6 +488,7 @@ int ipa2_get_smmu_params(struct ipa_smmu_in_params *in,
 					   "enabled" : "disabled");
 
 	out->smmu_enable = is_smmu_enable;
+	out->identity_map = false;
 
 	return 0;
 }

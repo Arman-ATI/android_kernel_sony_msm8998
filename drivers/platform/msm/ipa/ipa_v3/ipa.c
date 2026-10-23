@@ -7950,6 +7950,7 @@ static int ipa_smmu_wlan_cb_probe(struct device *dev)
 	struct ipa_smmu_cb_ctx *cb = ipa3_get_smmu_ctx(IPA_SMMU_CB_WLAN);
 	int fast = 0;
 	int bypass = 0;
+	int pg_ret;
 	u32 add_map_size;
 	const u32 *add_map;
 	int i;
@@ -7975,6 +7976,14 @@ static int ipa_smmu_wlan_cb_probe(struct device *dev)
 							"dma-coherent");
 	cb->dev   = dev;
 	cb->valid = true;
+
+	pg_ret = ipa3_wdi_pg_init();
+	if (pg_ret) {
+		IPAERR("WLAN WDI page table init failed: %s\n",
+		       pg_ret == -EBUSY ? "wedge" : "alloc");
+		cb->valid = false;
+		return pg_ret;
+	}
 
 	cb->va_start = cb->va_end  = cb->va_size = 0;
 	if (of_property_read_u32_array(
@@ -8764,6 +8773,7 @@ int ipa3_get_smmu_params(struct ipa_smmu_in_params *in,
 	}
 
 	out->shared_cb = false;
+	out->identity_map = false;
 
 	switch (in->smmu_client) {
 	case IPA_SMMU_WLAN_CLIENT:
@@ -8817,6 +8827,8 @@ int ipa3_get_smmu_params(struct ipa_smmu_in_params *in,
 	}
 
 	out->smmu_enable = is_smmu_enable;
+	out->identity_map = in->smmu_client == IPA_SMMU_WLAN_CLIENT &&
+		is_smmu_enable && ipa3_wdi_pg_supported();
 
 	return 0;
 }

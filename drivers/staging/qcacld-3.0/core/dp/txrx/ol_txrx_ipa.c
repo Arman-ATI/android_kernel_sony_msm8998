@@ -617,7 +617,7 @@ QDF_STATUS ol_txrx_ipa_setup(struct cdp_pdev *ppdev, void *ipa_i2w_cb,
 	ipa_res->rx_ready_doorbell_dmaaddr =
 		QDF_IPA_WDI_CONN_OUT_PARAMS_RX_UC_DB_PA(&pipe_out);
 
-	if (is_smmu_enabled) {
+	if (qdf_mem_smmu_s1_enabled(osdev)) {
 		pld_smmu_map(osdev->dev, ipa_res->tx_comp_doorbell_dmaaddr,
 			     &tx_comp_db_dmaaddr, sizeof(uint32_t));
 		ipa_res->tx_comp_doorbell_dmaaddr = tx_comp_db_dmaaddr;

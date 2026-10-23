@@ -3094,6 +3094,8 @@ int ipa3_init_interrupts(void);
 struct iommu_domain *ipa3_get_smmu_domain(void);
 int ipa3_release_wdi_mapping(u32 num_buffers, struct ipa_wdi_buffer_info *info);
 int ipa3_create_wdi_mapping(u32 num_buffers, struct ipa_wdi_buffer_info *info);
+bool ipa3_wdi_pg_supported(void);
+int ipa3_wdi_pg_init(void);
 int ipa3_set_flt_tuple_mask(int pipe_idx, struct ipahal_reg_hash_tuple *tuple);
 int ipa3_set_rt_tuple_mask(int tbl_idx, struct ipahal_reg_hash_tuple *tuple);
 void ipa3_set_resorce_groups_min_max_limits(void);

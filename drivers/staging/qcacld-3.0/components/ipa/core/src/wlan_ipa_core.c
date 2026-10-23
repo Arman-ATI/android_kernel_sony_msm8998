@@ -404,7 +404,9 @@ static inline void wlan_ipa_wdi_get_wdi_version(struct wlan_ipa_priv *ipa_ctx)
 static inline bool wlan_ipa_wdi_is_smmu_enabled(struct wlan_ipa_priv *ipa_ctx,
 					       qdf_device_t osdev)
 {
-	return ipa_ctx->is_smmu_enabled && qdf_mem_smmu_s1_enabled(osdev);
+	return ipa_ctx->is_smmu_enabled &&
+		(ipa_ctx->is_smmu_identity ||
+		 qdf_mem_smmu_s1_enabled(osdev));
 }
 
 static inline QDF_STATUS
@@ -495,8 +497,11 @@ static inline QDF_STATUS wlan_ipa_wdi_init(struct wlan_ipa_priv *ipa_ctx)
 		QDF_IPA_WDI_INIT_OUT_PARAMS_IS_OVER_GSI(&out);
 	ipa_ctx->is_smmu_enabled =
 		QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_ENABLED(&out);
-	ipa_info("ipa_over_gsi: %d, is_smmu_enabled: %d",
-		 ipa_ctx->over_gsi, ipa_ctx->is_smmu_enabled);
+	ipa_ctx->is_smmu_identity =
+		QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_IDENTITY(&out);
+	ipa_info("ipa_over_gsi: %d, is_smmu_enabled: %d, identity: %d",
+		 ipa_ctx->over_gsi, ipa_ctx->is_smmu_enabled,
+		 ipa_ctx->is_smmu_identity);
 
 	if (QDF_IPA_WDI_INIT_OUT_PARAMS_IS_UC_READY(&out)) {
 		ipa_debug("IPA uC READY");
@@ -3024,14 +3029,16 @@ QDF_STATUS wlan_ipa_publish_smmu_params(struct wlan_ipa_priv *ipa_ctx,
 					qdf_device_t osdev)
 {
 	bool enabled;
+	bool identity;
 
 	if (!ipa_ctx)
 		return QDF_STATUS_E_INVAL;
 
 	enabled = wlan_ipa_wdi_is_smmu_enabled(ipa_ctx, osdev);
+	identity = enabled && ipa_ctx->is_smmu_identity;
 
 	return cdp_ipa_set_smmu_params(ipa_ctx->dp_soc, ipa_ctx->dp_pdev,
-				       enabled, false);
+				       enabled, identity);
 }
 
 /**

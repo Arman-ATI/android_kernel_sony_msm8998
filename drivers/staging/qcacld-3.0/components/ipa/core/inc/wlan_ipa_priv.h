@@ -697,6 +697,7 @@ struct wlan_ipa_priv {
 
 	uint32_t wdi_version;
 	bool is_smmu_enabled;	/* IPA caps returned from ipa_wdi_init */
+	bool is_smmu_identity;	/* WLAN buffers mapped at physical address */
 	qdf_atomic_t stats_quota;
 	uint8_t curr_bw_level;
 };

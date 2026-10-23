@@ -57,6 +57,9 @@ typedef __qdf_ipa_wdi_init_out_params_t qdf_ipa_wdi_init_out_params_t;
 #define QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_ENABLED(out_params)	\
 	__QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_ENABLED(out_params)
 
+#define QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_IDENTITY(out_params)	\
+	__QDF_IPA_WDI_INIT_OUT_PARAMS_IS_SMMU_IDENTITY(out_params)
+
 /**
  * qdf_ipa_wdi_pipe_setup_info_smmu_t - WDI TX/Rx configuration
  */

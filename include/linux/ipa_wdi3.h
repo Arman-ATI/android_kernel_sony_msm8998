@@ -51,11 +51,13 @@ struct ipa_wdi_init_in_params {
     is ready.
  * @is_smmu_enable: is smmu enabled
  * @is_over_gsi: is wdi over GSI or uC
+ * @is_smmu_identity: are WLAN buffers mapped at their physical address
  */
 struct ipa_wdi_init_out_params {
 	bool is_uC_ready;
 	bool is_smmu_enabled;
 	bool is_over_gsi;
+	bool is_smmu_identity;
 };
 
 /**
