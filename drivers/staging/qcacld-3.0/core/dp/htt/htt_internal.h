@@ -556,12 +556,13 @@ int htt_rx_attach(struct htt_pdev_t *pdev);
 
 #if defined(CONFIG_HL_SUPPORT)
 
-static inline void htt_rx_detach(struct htt_pdev_t *pdev)
+static inline int htt_rx_detach(struct htt_pdev_t *pdev)
 {
+	return 0;
 }
 #else
 
-void htt_rx_detach(struct htt_pdev_t *pdev);
+int htt_rx_detach(struct htt_pdev_t *pdev);
 #endif
 
 int htt_htc_attach(struct htt_pdev_t *pdev, uint16_t service_id);
@@ -618,12 +619,14 @@ void htt_htc_misc_pkt_pool_free(struct htt_pdev_t *pdev);
 int
 htt_rx_hash_list_insert(struct htt_pdev_t *pdev,
 			qdf_dma_addr_t paddr,
-			qdf_nbuf_t netbuf);
+			qdf_nbuf_t netbuf,
+			struct htt_rx_wdi_owner *owner);
 #else
 static inline int
 htt_rx_hash_list_insert(struct htt_pdev_t *pdev,
 			qdf_dma_addr_t paddr,
-			qdf_nbuf_t netbuf)
+			qdf_nbuf_t netbuf,
+			struct htt_rx_wdi_owner *owner)
 {
 	return 0;
 }

@@ -93,9 +93,22 @@ struct htt_list_node {
 	struct htt_list_node *next;
 };
 
+enum htt_rx_wdi_owner_state {
+	HTT_RX_WDI_FREE,
+	HTT_RX_WDI_RESERVED,
+	HTT_RX_WDI_POSTED,
+};
+
+struct htt_rx_wdi_owner {
+	struct htt_list_node node;
+	qdf_nbuf_t netbuf;
+	uint8_t state;
+};
+
 struct htt_rx_hash_entry {
 	qdf_dma_addr_t paddr;
 	qdf_nbuf_t netbuf;
+	struct htt_rx_wdi_owner *wdi_owner;
 	A_UINT8 fromlist;
 	struct htt_list_node listnode;
 #ifdef RX_HASH_DEBUG
@@ -375,6 +388,11 @@ struct htt_pdev_t {
 		struct htt_rx_hash_bucket **hash_table;
 		uint32_t listnode_offset;
 		bool smmu_map;
+		bool ipa_smmu_map_failed;
+		struct htt_rx_wdi_owner *wdi_owners;
+		struct htt_rx_wdi_owner **wdi_owners_ring;
+		struct htt_list_node wdi_owner_free;
+		qdf_spinlock_t wdi_owner_lock;
 	} rx_ring;
 
 #ifndef CONFIG_HL_SUPPORT

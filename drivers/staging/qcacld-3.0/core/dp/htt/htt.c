@@ -713,7 +713,12 @@ QDF_STATUS htt_attach_target(htt_pdev_handle pdev)
 
 void htt_detach(htt_pdev_handle pdev)
 {
-	htt_rx_detach(pdev);
+	int ret;
+
+	ret = htt_rx_detach(pdev);
+	if (ret)
+		panic("htt: incomplete IPA mapping teardown: %d", ret);
+
 	htt_tx_detach(pdev);
 	htt_htc_pkt_pool_free(pdev);
 #ifdef ATH_11AC_TXCOMPACT
