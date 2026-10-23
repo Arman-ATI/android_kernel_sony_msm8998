@@ -2010,8 +2010,13 @@ int hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg)
 
 	ucfg_ipa_set_dp_handle(hdd_ctx->psoc,
 			       cds_get_context(QDF_MODULE_ID_SOC));
-	ucfg_ipa_set_txrx_handle(hdd_ctx->psoc,
-				 cds_get_context(QDF_MODULE_ID_TXRX));
+	status = ucfg_ipa_set_txrx_handle(hdd_ctx->psoc,
+					  cds_get_context(QDF_MODULE_ID_TXRX));
+	if (QDF_IS_STATUS_ERROR(status)) {
+		hdd_err("Failed to publish IPA SMMU parameters: %d", status);
+		ret = qdf_status_to_os_return(status);
+		goto pdev_close;
+	}
 	ucfg_ipa_reg_sap_xmit_cb(hdd_ctx->pdev,
 				 hdd_softap_ipa_start_xmit);
 	ucfg_ipa_reg_send_to_nw_cb(hdd_ctx->pdev,

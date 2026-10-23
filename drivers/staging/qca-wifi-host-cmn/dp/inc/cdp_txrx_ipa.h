@@ -423,6 +423,29 @@ cdp_ipa_setup(ol_txrx_soc_handle soc, struct cdp_pdev *pdev, void *ipa_i2w_cb,
 #endif /* CONFIG_IPA_WDI_UNIFIED_API */
 
 /**
+ * cdp_ipa_set_smmu_params() - publish WLAN SMMU and mapping mode
+ * @soc: data path soc handle
+ * @pdev: handle to the device instance
+ * @enabled: SMMU translation enabled for WLAN buffers
+ * @identity: buffers are mapped at their physical address
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_ipa_set_smmu_params(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
+			bool enabled, bool identity)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops || !pdev)
+		return QDF_STATUS_E_FAILURE;
+
+	if (soc->ops->ipa_ops->ipa_set_smmu_params)
+		return soc->ops->ipa_ops->ipa_set_smmu_params(pdev, enabled,
+							      identity);
+
+	return identity ? QDF_STATUS_E_NOSUPPORT : QDF_STATUS_SUCCESS;
+}
+
+/**
  * cdp_ipa_cleanup() - Disconnect IPA pipes
  * @soc: data path soc handle
  * @tx_pipe_handle: Tx pipe handle

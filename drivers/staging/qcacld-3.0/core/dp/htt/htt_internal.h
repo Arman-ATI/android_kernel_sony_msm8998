@@ -634,6 +634,9 @@ htt_rx_hash_list_lookup(struct htt_pdev_t *pdev, qdf_dma_addr_t paddr,
 			bool *found);
 
 #ifdef IPA_OFFLOAD
+int htt_ipa_uc_smmu_page(struct htt_pdev_t *pdev, phys_addr_t pa,
+			 unsigned long iova, bool map);
+
 int
 htt_tx_ipa_uc_attach(struct htt_pdev_t *pdev,
 		     unsigned int uc_tx_buf_sz,
@@ -682,6 +685,12 @@ htt_rx_ipa_uc_attach(struct htt_pdev_t *pdev, unsigned int rx_ind_ring_size)
 static inline int htt_tx_ipa_uc_detach(struct htt_pdev_t *pdev)
 {
 	return 0;
+}
+
+static inline int htt_ipa_uc_smmu_page(struct htt_pdev_t *pdev, phys_addr_t pa,
+				       unsigned long iova, bool map)
+{
+	return -EOPNOTSUPP;
 }
 
 static inline int htt_rx_ipa_uc_detach(struct htt_pdev_t *pdev)

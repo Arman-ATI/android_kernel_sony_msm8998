@@ -877,6 +877,30 @@ void htt_display(htt_pdev_handle pdev, int indent)
 #endif
 
 #ifdef IPA_OFFLOAD
+int htt_ipa_uc_smmu_page(struct htt_pdev_t *pdev, phys_addr_t pa,
+			 unsigned long iova, bool map)
+{
+	qdf_mem_info_t info = {0};
+	int ret;
+
+	if ((pa & (PAGE_SIZE - 1)) || (iova & (PAGE_SIZE - 1)))
+		return -EINVAL;
+
+	info.pa = pa;
+	info.iova = iova;
+	info.size = PAGE_SIZE;
+	info.result = -EIO;
+
+	ret = cds_smmu_map_unmap(map, 1, &info);
+	if (ret)
+		return ret;
+
+	if (map || pdev->ipa_wdi_smmu_identity)
+		return info.result ? -EIO : 0;
+
+	return info.result == PAGE_SIZE ? 0 : -EIO;
+}
+
 /**
  * htt_ipa_uc_attach() - Allocate UC data path resources
  * @pdev: handle to the HTT instance
@@ -887,6 +911,7 @@ void htt_display(htt_pdev_handle pdev, int indent)
 int htt_ipa_uc_attach(struct htt_pdev_t *pdev)
 {
 	int error;
+	int cleanup_error;
 
 	QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_DEBUG, "%s: enter",
 		  __func__);
@@ -900,7 +925,12 @@ int htt_ipa_uc_attach(struct htt_pdev_t *pdev)
 	if (error) {
 		QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_ERROR,
 			  "HTT IPA UC TX attach fail code %d", error);
-		HTT_ASSERT0(0);
+		if (error == -EBUSY)
+			return error;
+		cleanup_error = htt_tx_ipa_uc_detach(pdev);
+		if (cleanup_error)
+			panic("htt: incomplete IPA mapping teardown: %d",
+			      cleanup_error);
 		return error;
 	}
 
@@ -910,9 +940,11 @@ int htt_ipa_uc_attach(struct htt_pdev_t *pdev)
 	if (error) {
 		QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_ERROR,
 			  "HTT IPA UC RX attach fail code %d", error);
-		htt_tx_ipa_uc_detach(pdev);
-		HTT_ASSERT0(0);
-		return error;
+		cleanup_error = htt_tx_ipa_uc_detach(pdev);
+		if (cleanup_error)
+			panic("htt: incomplete IPA mapping teardown: %d",
+			      cleanup_error);
+		return error > 0 ? -ENOMEM : error;
 	}
 
 	QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_DEBUG, "%s: exit",
@@ -928,11 +960,15 @@ int htt_ipa_uc_attach(struct htt_pdev_t *pdev)
  */
 void htt_ipa_uc_detach(struct htt_pdev_t *pdev)
 {
+	int ret;
+
 	QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_DEBUG, "%s: enter",
 		__func__);
 
 	/* TX IPA micro controller detach */
-	htt_tx_ipa_uc_detach(pdev);
+	ret = htt_tx_ipa_uc_detach(pdev);
+	if (ret)
+		panic("htt: incomplete IPA mapping teardown: %d", ret);
 
 	/* RX IPA micro controller detach */
 	htt_rx_ipa_uc_detach(pdev);

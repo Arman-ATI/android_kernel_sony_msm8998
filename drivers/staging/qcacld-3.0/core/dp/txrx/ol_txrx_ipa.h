@@ -136,6 +136,8 @@ QDF_STATUS ol_txrx_ipa_setup(struct cdp_pdev *pdev, void *ipa_i2w_cb,
 		uint32_t ipa_desc_size, void *ipa_priv, bool is_rm_enabled,
 		uint32_t *tx_pipe_handle, uint32_t *rx_pipe_handle);
 #endif /* CONFIG_IPA_WDI_UNIFIED_API */
+QDF_STATUS ol_txrx_ipa_set_smmu_params(struct cdp_pdev *pdev,
+				       bool enabled, bool identity);
 QDF_STATUS ol_txrx_ipa_cleanup(uint32_t tx_pipe_handle,
 		uint32_t rx_pipe_handle);
 QDF_STATUS ol_txrx_ipa_setup_iface(char *ifname, uint8_t *mac_addr,

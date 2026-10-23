@@ -3014,6 +3014,27 @@ static void wlan_ipa_mcc_work_handler(void *data)
 #endif
 
 /**
+ * wlan_ipa_publish_smmu_params() - publish WLAN mapping mode
+ * @ipa_ctx: IPA context
+ * @osdev: QDF device
+ *
+ * Return: QDF_STATUS enumeration
+ */
+QDF_STATUS wlan_ipa_publish_smmu_params(struct wlan_ipa_priv *ipa_ctx,
+					qdf_device_t osdev)
+{
+	bool enabled;
+
+	if (!ipa_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	enabled = wlan_ipa_wdi_is_smmu_enabled(ipa_ctx, osdev);
+
+	return cdp_ipa_set_smmu_params(ipa_ctx->dp_soc, ipa_ctx->dp_pdev,
+				       enabled, false);
+}
+
+/**
  * wlan_ipa_setup() - IPA initialization function
  * @ipa_ctx: IPA context
  * @ipa_cfg: IPA config

@@ -168,9 +168,10 @@ void ipa_set_dp_handle(struct wlan_objmgr_psoc *psoc, void *dp_soc);
  * @psoc: psoc handle
  * @txrx_handle: dp txrx handle
  *
- * Return: None
+ * Return: QDF_STATUS
  */
-void ipa_set_txrx_handle(struct wlan_objmgr_psoc *psoc, void *txrx_handle);
+QDF_STATUS ipa_set_txrx_handle(struct wlan_objmgr_psoc *psoc,
+			       void *txrx_handle);
 
 /**
  * ipa_rm_set_perf_level() - set ipa rm perf level

@@ -39,7 +39,7 @@ bool ucfg_ipa_uc_is_enabled(void)
 	return ipa_config_is_uc_enabled();
 }
 
-void ucfg_ipa_set_txrx_handle(struct wlan_objmgr_psoc *psoc,
+QDF_STATUS ucfg_ipa_set_txrx_handle(struct wlan_objmgr_psoc *psoc,
 				    void *txrx_handle)
 {
 	return ipa_set_txrx_handle(psoc, txrx_handle);

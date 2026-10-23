@@ -125,33 +125,37 @@ void ipa_set_dp_handle(struct wlan_objmgr_psoc *psoc, void *dp_soc)
 	wlan_objmgr_pdev_release_ref(pdev, WLAN_IPA_ID);
 }
 
-void ipa_set_txrx_handle(struct wlan_objmgr_psoc *psoc, void *txrx_handle)
+QDF_STATUS ipa_set_txrx_handle(struct wlan_objmgr_psoc *psoc,
+			       void *txrx_handle)
 {
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_ipa_priv *ipa_obj;
+	QDF_STATUS status;
 
 	if (!ipa_config_is_enabled()) {
 		ipa_debug("ipa is disabled");
-		return;
+		return QDF_STATUS_SUCCESS;
 	}
 
-	pdev = wlan_objmgr_get_pdev_by_id(psoc, 0,
-					  WLAN_IPA_ID);
-
+	pdev = wlan_objmgr_get_pdev_by_id(psoc, 0, WLAN_IPA_ID);
 	if (!pdev) {
 		ipa_err("Failed to get pdev handle");
-		return;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	ipa_obj = ipa_pdev_get_priv_obj(pdev);
 	if (!ipa_obj) {
 		ipa_err("IPA object is NULL");
 		wlan_objmgr_pdev_release_ref(pdev, WLAN_IPA_ID);
-		return;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	ipa_obj->dp_pdev = txrx_handle;
+	status = wlan_ipa_publish_smmu_params(ipa_obj,
+					      wlan_psoc_get_qdf_dev(psoc));
 	wlan_objmgr_pdev_release_ref(pdev, WLAN_IPA_ID);
+
+	return status;
 }
 
 QDF_STATUS ipa_rm_set_perf_level(struct wlan_objmgr_pdev *pdev,

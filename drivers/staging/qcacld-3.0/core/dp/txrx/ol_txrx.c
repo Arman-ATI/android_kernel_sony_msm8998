@@ -5712,6 +5712,7 @@ static struct cdp_ipa_ops ol_ops_ipa = {
 	.ipa_enable_autonomy = ol_txrx_ipa_enable_autonomy,
 	.ipa_disable_autonomy = ol_txrx_ipa_disable_autonomy,
 	.ipa_setup = ol_txrx_ipa_setup,
+	.ipa_set_smmu_params = ol_txrx_ipa_set_smmu_params,
 	.ipa_cleanup = ol_txrx_ipa_cleanup,
 	.ipa_setup_iface = ol_txrx_ipa_setup_iface,
 	.ipa_cleanup_iface = ol_txrx_ipa_cleanup_iface,

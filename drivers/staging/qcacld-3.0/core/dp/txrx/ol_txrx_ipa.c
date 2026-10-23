@@ -299,6 +299,20 @@ QDF_STATUS ol_txrx_ipa_disable_autonomy(struct cdp_pdev *ppdev)
 	return QDF_STATUS_SUCCESS;
 }
 
+QDF_STATUS ol_txrx_ipa_set_smmu_params(struct cdp_pdev *ppdev,
+				       bool enabled, bool identity)
+{
+	ol_txrx_pdev_handle pdev = (ol_txrx_pdev_handle)ppdev;
+
+	if (!pdev || !pdev->htt_pdev)
+		return QDF_STATUS_E_INVAL;
+
+	pdev->htt_pdev->ipa_wdi_smmu_enabled = enabled;
+	pdev->htt_pdev->ipa_wdi_smmu_identity = enabled && identity;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #ifdef CONFIG_IPA_WDI_UNIFIED_API
 
 #ifndef QCA_LL_TX_FLOW_CONTROL_V2

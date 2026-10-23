@@ -74,10 +74,10 @@ void ucfg_ipa_set_dp_handle(struct wlan_objmgr_psoc *psoc,
  * @psoc: psoc obj
  * @txrx_handle: data path pdev txrx handle
  *
- * Return: None
+ * Return: QDF_STATUS
  */
-void ucfg_ipa_set_txrx_handle(struct wlan_objmgr_psoc *psoc,
-			      void *txrx_handle);
+QDF_STATUS ucfg_ipa_set_txrx_handle(struct wlan_objmgr_psoc *psoc,
+				    void *txrx_handle);
 
 /**
  * ucfg_ipa_set_perf_level() - Set IPA perf level

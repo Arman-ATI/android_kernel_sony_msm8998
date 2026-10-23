@@ -116,12 +116,18 @@ struct htt_rx_hash_bucket {
  * Micro controller datapath offload
  * WLAN TX resources
  */
+struct htt_ipa_uc_tx_map {
+	uint32_t mapped_pages;
+	uint32_t first_live;
+};
+
 struct htt_ipa_uc_tx_resource_t {
 	qdf_shared_mem_t *tx_ce_idx;
 	qdf_shared_mem_t *tx_comp_ring;
 
 	uint32_t tx_comp_idx_paddr;
 	qdf_shared_mem_t **tx_buf_pool_strg;
+	struct htt_ipa_uc_tx_map *tx_buf_maps;
 	uint32_t alloc_tx_buf_cnt;
 };
 
@@ -424,6 +430,8 @@ struct htt_pdev_t {
 	struct htt_ipa_uc_tx_resource_t ipa_uc_tx_rsc;
 	struct htt_ipa_uc_rx_resource_t ipa_uc_rx_rsc;
 	int is_ipa_uc_enabled;
+	bool ipa_wdi_smmu_enabled;
+	bool ipa_wdi_smmu_identity;
 
 	struct htt_tx_credit_t htt_tx_credit;
 

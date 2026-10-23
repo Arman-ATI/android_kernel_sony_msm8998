@@ -70,6 +70,16 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 			  struct wlan_ipa_config *ipa_cfg);
 
 /**
+ * wlan_ipa_publish_smmu_params() - publish WLAN mapping mode to the datapath
+ * @ipa_ctx: IPA priv obj
+ * @osdev: QDF device
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_ipa_publish_smmu_params(struct wlan_ipa_priv *ipa_ctx,
+					qdf_device_t osdev);
+
+/**
  * wlan_ipa_get_obj_context - Get IPA OBJ context
  *
  * Return: IPA context
