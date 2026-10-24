@@ -54,7 +54,7 @@ enum {
 };
 
 #define DFPS_MAX_NUM_OF_FRAME_RATES 16
-#ifdef CONFIG_FB_MSM_MDSS
+#if defined(CONFIG_FB_MSM_MDSS) && !defined(CONFIG_ARCH_MSM8998)
 #define PLL_TRIM_CODES_SIZE 2
 #else
 #define PLL_TRIM_CODES_SIZE 3
@@ -63,7 +63,7 @@ enum {
 struct dfps_pll_codes {
 	uint32_t pll_codes_1;
 	uint32_t pll_codes_2;
-#ifndef CONFIG_FB_MSM_MDSS
+#if PLL_TRIM_CODES_SIZE == 3
 	uint32_t pll_codes_3;
 #endif
 };
