@@ -2074,7 +2074,7 @@ int slim_define_ch(struct slim_device *sb, struct slim_ch *prop, u16 *chanh,
 	struct slim_controller *ctrl = sb->ctrl;
 	int i, ret = 0;
 
-	if (!ctrl || !chanh || !prop || !nchan)
+	if (!ctrl || !chanh || !prop || !nchan || !prop->ratem)
 		return -EINVAL;
 	mutex_lock(&ctrl->sched.m_reconf);
 	for (i = 0; i < nchan; i++) {
