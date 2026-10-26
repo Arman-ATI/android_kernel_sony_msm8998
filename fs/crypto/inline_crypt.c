@@ -114,9 +114,14 @@ int fscrypt_select_encryption_impl(struct fscrypt_info *ci,
 	if (crypto_mode == BLK_ENCRYPTION_MODE_INVALID)
 		return 0;
 
-	/* The filesystem must be mounted with -o inlinecrypt */
-	if (!sb->s_cop->inline_crypt_enabled ||
-	    !sb->s_cop->inline_crypt_enabled(sb))
+	/*
+	 * The filesystem must be mounted with -o inlinecrypt, except for the
+	 * legacy ICE (private) mode which always uses the inline hardware.
+	 */
+	if (fscrypt_policy_contents_mode(&ci->ci_policy) !=
+	    FSCRYPT_MODE_PRIVATE &&
+	    (!sb->s_cop->inline_crypt_enabled ||
+	     !sb->s_cop->inline_crypt_enabled(sb)))
 		return 0;
 
 	/*
