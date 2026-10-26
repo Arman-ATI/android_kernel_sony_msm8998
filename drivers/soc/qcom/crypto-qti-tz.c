@@ -14,6 +14,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/slab.h>
 #include <asm/cacheflush.h>
 #include <soc/qcom/scm.h>
 #include <soc/qcom/qtee_shmbridge.h>
@@ -22,6 +23,98 @@
 #include "crypto-qti-tz.h"
 
 unsigned int storage_type = SDCC_CE;
+bool qti_ice_legacy_v2;
+
+/* legacy (ICE v2 era) TZ ES commands, as used by the 4.4 pfk_ice driver */
+#define TZ_ES_SET_ICE_KEY		0x2
+#define TZ_ES_INVALIDATE_ICE_KEY	0x3
+#define TZ_ES_SET_ICE_KEY_ID \
+	TZ_SYSCALL_CREATE_SMC_ID(TZ_OWNER_SIP, TZ_SVC_ES, TZ_ES_SET_ICE_KEY)
+#define TZ_ES_INVALIDATE_ICE_KEY_ID \
+	TZ_SYSCALL_CREATE_SMC_ID(TZ_OWNER_SIP, TZ_SVC_ES, \
+				 TZ_ES_INVALIDATE_ICE_KEY)
+#define TZ_ES_SET_ICE_KEY_PARAM_ID \
+	TZ_SYSCALL_CREATE_PARAM_ID_5(TZ_SYSCALL_PARAM_TYPE_VAL, \
+		TZ_SYSCALL_PARAM_TYPE_BUF_RW, TZ_SYSCALL_PARAM_TYPE_VAL, \
+		TZ_SYSCALL_PARAM_TYPE_BUF_RW, TZ_SYSCALL_PARAM_TYPE_VAL)
+#define TZ_ES_INVALIDATE_ICE_KEY_PARAM_ID \
+	TZ_SYSCALL_CREATE_PARAM_ID_1(TZ_SYSCALL_PARAM_TYPE_VAL)
+
+#define LEGACY_ICE_KEY_SIZE	32
+#define LEGACY_ICE_SALT_SIZE	32
+/* key index 0 and 1 are reserved for FDE */
+#define LEGACY_ICE_MIN_INDEX	2
+#define LEGACY_ICE_MAX_INDEX	31
+
+static int crypto_qti_legacy_program_key(const struct blk_crypto_key *key,
+					 unsigned int slot)
+{
+	struct scm_desc desc = {0};
+	unsigned int index = slot + LEGACY_ICE_MIN_INDEX;
+	u32 words[BLK_CRYPTO_MAX_WRAPPED_KEY_SIZE / sizeof(u32)];
+	u8 *tzkey, *tzsalt;
+	int err, i;
+
+	if (index > LEGACY_ICE_MAX_INDEX ||
+	    key->size < LEGACY_ICE_KEY_SIZE + LEGACY_ICE_SALT_SIZE)
+		return -EINVAL;
+
+	tzkey = kzalloc(LEGACY_ICE_KEY_SIZE, GFP_KERNEL);
+	tzsalt = kzalloc(LEGACY_ICE_SALT_SIZE, GFP_KERNEL);
+	if (!tzkey || !tzsalt) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	/* undo the be32 swap done by fscrypt, giving the derived 4.4 key */
+	memcpy(words, key->raw, key->size);
+	for (i = 0; i < key->size / sizeof(u32); i++)
+		__cpu_to_be32s(&words[i]);
+	memcpy(tzkey, words, LEGACY_ICE_KEY_SIZE);
+	memcpy(tzsalt, (u8 *)words + LEGACY_ICE_KEY_SIZE, LEGACY_ICE_SALT_SIZE);
+	memzero_explicit(words, sizeof(words));
+
+	dmac_flush_range(tzkey, tzkey + LEGACY_ICE_KEY_SIZE);
+	dmac_flush_range(tzsalt, tzsalt + LEGACY_ICE_SALT_SIZE);
+
+	desc.arginfo = TZ_ES_SET_ICE_KEY_PARAM_ID;
+	desc.args[0] = index;
+	desc.args[1] = virt_to_phys(tzkey);
+	desc.args[2] = LEGACY_ICE_KEY_SIZE;
+	desc.args[3] = virt_to_phys(tzsalt);
+	desc.args[4] = LEGACY_ICE_SALT_SIZE;
+
+	err = scm_call2(TZ_ES_SET_ICE_KEY_ID, &desc);
+	if (err)
+		pr_err("%s: legacy set key error %d index %u\n",
+		       __func__, err, index);
+out:
+	if (tzkey)
+		memzero_explicit(tzkey, LEGACY_ICE_KEY_SIZE);
+	if (tzsalt)
+		memzero_explicit(tzsalt, LEGACY_ICE_SALT_SIZE);
+	kfree(tzkey);
+	kfree(tzsalt);
+	return err;
+}
+
+static int crypto_qti_legacy_invalidate_key(unsigned int slot)
+{
+	struct scm_desc desc = {0};
+	unsigned int index = slot + LEGACY_ICE_MIN_INDEX;
+	int err;
+
+	if (index > LEGACY_ICE_MAX_INDEX)
+		return -EINVAL;
+
+	desc.arginfo = TZ_ES_INVALIDATE_ICE_KEY_PARAM_ID;
+	desc.args[0] = index;
+	err = scm_call2(TZ_ES_INVALIDATE_ICE_KEY_ID, &desc);
+	if (err)
+		pr_err("%s: legacy invalidate error %d index %u\n",
+		       __func__, err, index);
+	return err;
+}
 
 int crypto_qti_program_key(struct crypto_vops_qti_entry *ice_entry,
 			   const struct blk_crypto_key *key,
@@ -38,6 +131,9 @@ int crypto_qti_program_key(struct crypto_vops_qti_entry *ice_entry,
 		u8 bytes[BLK_CRYPTO_MAX_WRAPPED_KEY_SIZE];
 		u32 words[BLK_CRYPTO_MAX_WRAPPED_KEY_SIZE / sizeof(u32)];
 	} key_new;
+
+	if (qti_ice_legacy_v2)
+		return crypto_qti_legacy_program_key(key, slot);
 
 	err = qtee_shmbridge_allocate_shm(key->size, &shm);
 	if (err)
@@ -80,6 +176,9 @@ int crypto_qti_invalidate_key(
 	int err = 0;
 	uint32_t smc_id = 0;
 	struct scm_desc desc = {0};
+
+	if (qti_ice_legacy_v2)
+		return crypto_qti_legacy_invalidate_key(slot);
 
 	smc_id = TZ_ES_INVALIDATE_ICE_KEY_CE_TYPE_ID;
 

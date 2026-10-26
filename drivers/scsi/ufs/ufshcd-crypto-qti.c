@@ -15,6 +15,7 @@
 
 #include <crypto/algapi.h>
 #include <linux/platform_device.h>
+#include <linux/of.h>
 #include <linux/crypto-qti-common.h>
 #if IS_ENABLED(CONFIG_CRYPTO_DEV_QCOM_ICE)
 #include <crypto/ice.h>
@@ -26,6 +27,10 @@
 #define MAXIMUM_DUN_SIZE 65536
 
 #define NUM_KEYSLOTS(hba) (hba->crypto_capabilities.config_count + 1)
+
+/* key indexes 0 and 1 are reserved for FDE */
+#define ICE_LEGACY_KEY_INDEX_BASE		2
+#define ICE_LEGACY_NUM_KEYSLOTS		30
 
 static struct ufs_hba_crypto_variant_ops ufshcd_crypto_qti_variant_ops = {
 	.hba_init_crypto = ufshcd_crypto_qti_init_crypto,
@@ -88,6 +93,13 @@ static int ufshcd_crypto_qti_keyslot_program(struct keyslot_manager *ksm,
 	crypto_alg_id = ufshcd_crypto_cap_find(hba, key->crypto_mode,
 					       key->data_unit_size);
 
+	if (qti_ice_legacy_v2) {
+		if (!ufshcd_is_crypto_enabled(hba) ||
+		    !ufshcd_keyslot_valid(hba, slot))
+			return -EINVAL;
+		data_unit_mask = get_data_unit_size_mask(key->data_unit_size);
+		crypto_alg_id = 0;
+	} else {
 	if (!ufshcd_is_crypto_enabled(hba) ||
 	    !ufshcd_keyslot_valid(hba, slot) ||
 	    !ice_cap_idx_valid(hba, crypto_alg_id))
@@ -98,6 +110,7 @@ static int ufshcd_crypto_qti_keyslot_program(struct keyslot_manager *ksm,
 	if (!(data_unit_mask &
 	      hba->crypto_cap_array[crypto_alg_id].sdus_mask))
 		return -EINVAL;
+	}
 
 	if (!hba->pm_op_in_progress)
 		pm_runtime_get_sync(hba->dev);
@@ -206,6 +219,8 @@ static int ufshcd_hba_init_crypto_qti_spec(struct ufs_hba *hba,
 	 */
 	hba->crypto_capabilities.reg_val =
 			  cpu_to_le32(ufshcd_readl(hba, REG_UFS_CCAP));
+	if (qti_ice_legacy_v2)
+		hba->crypto_capabilities.config_count = ICE_LEGACY_NUM_KEYSLOTS - 1;
 	hba->crypto_cfg_register =
 		 (u32)hba->crypto_capabilities.config_array_ptr * 0x100;
 	hba->crypto_cap_array =
@@ -266,6 +281,9 @@ int ufshcd_crypto_qti_init_crypto(struct ufs_hba *hba,
 	void __iomem *mmio_base;
 	struct resource *mem_res;
 
+	qti_ice_legacy_v2 = of_property_read_bool(hba->dev->of_node,
+						  "qcom,legacy-ice-v2");
+
 	mem_res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 								"ufs_ice");
 	mmio_base = devm_ioremap_resource(hba->dev, mem_res);
@@ -307,6 +325,7 @@ int ufshcd_crypto_qti_prep_lrbp_crypto(struct ufs_hba *hba,
 
 	lrbp->crypto_enable = false;
 	req = cmd->request;
+
 	if (!req || !req->bio)
 		return ret;
 
@@ -341,7 +360,8 @@ int ufshcd_crypto_qti_prep_lrbp_crypto(struct ufs_hba *hba,
 		return -EINVAL;
 
 	lrbp->crypto_enable = true;
-	lrbp->crypto_key_slot = bc->bc_keyslot;
+	lrbp->crypto_key_slot = bc->bc_keyslot +
+		(qti_ice_legacy_v2 ? ICE_LEGACY_KEY_INDEX_BASE : 0);
 	if (bc->is_ext4) {
 		lrbp->data_unit_num = (u64)cmd->request->bio->bi_iter.bi_sector;
 		lrbp->data_unit_num >>= 3;
