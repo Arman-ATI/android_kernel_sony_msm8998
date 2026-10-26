@@ -787,6 +787,15 @@ config LEDS_QTI_TRI_LED
 	  at max and each is controlled by a PWM channel used for dimming
 	  or blinking.
 
+config LEDS_QPNP_WLED
+	tristate "Support for QPNP WLED"
+	depends on LEDS_CLASS && SPMI
+	help
+	  This driver supports the WLED (White LED) functionality of Qualcomm
+	  Technologies, Inc. QPNP PMICs.  WLED is used for LCD backlight with
+	  variable brightness.  It also supports outputting the Avdd supply for
+	  AMOLED displays.
+
 config LEDS_QPNP_FLASH_V2
         tristate "Support for QPNP V2 Flash LEDs"
         depends on LEDS_CLASS && MFD_SPMI_PMIC
