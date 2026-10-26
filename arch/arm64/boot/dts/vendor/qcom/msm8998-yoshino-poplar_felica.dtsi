@@ -1,0 +1,71 @@
+/* arch/arm64/boot/dts/qcom/msm8998-yoshino-poplar_felica.dtsi
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+/*
+ * Copyright (C) 2016 Sony Mobile Communications Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2, as
+ * published by the Free Software Foundation.
+ */
+
+/*
+ * Sony CXD224x FeliCa controller of the Japanese variants. It shares the I2C
+ * bus and GPIOs with the NXP PN553 of the global variants; both are described
+ * and only the driver matching the hardware gets loaded.
+ */
+
+&soc {
+	/* I2C: BLSP7 */
+	i2c@c1b5000 { /* BLSP2 QUP1 */
+		felica_ldo@1e {
+			compatible = "rohm,bd7602";
+			reg = <0x1e>;
+		};
+		felica@29 {
+			compatible = "sony,cxd224x-i2c";
+			reg = <0x29>;
+			interrupt-parent = <&tlmm>;
+			interrupts = <92 0x2002>;
+			sony,nfc_int = <&tlmm 92 0>;
+			sony,nfc_wake= <&tlmm 93 0>;
+
+			pinctrl-names = "felica_active","felica_suspend";
+			pinctrl-0 = <&msm_gpio_92_felica>;
+			pinctrl-1 = <&msm_gpio_92_felica>;
+
+			/* Defined in Clock Distribution */
+			clocks = <&clock_rpmcc RPM_SMD_LN_BB_CLK3_PIN>;
+			clock-names = "felica_clk";
+		};
+	};
+
+	felica,pm-ops {
+		compatible = "sony,cxd224x-pm-ops";
+	};
+};
+
+&tlmm {
+	/* GPIO_92 : NFC_IRQ_FELICA_INT_N */
+	msm_gpio_92_felica: msm_gpio_92_felica {
+		mux {
+			pins = "gpio92";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio92";
+			drive-strength = <2>;
+			bias-disable;
+			input-enable;
+		};
+	};
+};
