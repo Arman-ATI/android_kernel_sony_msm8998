@@ -356,62 +356,6 @@ static bool msm_csid_find_max_clk_rate(struct csid_device *csid_dev)
 	return ret;
 }
 
-static int msm_csid_seccam_send_topology(struct csid_device *csid_dev,
-	struct msm_camera_csid_params *csid_params)
-{
-	void __iomem *csidbase;
-	struct scm_desc desc = {0};
-
-	csidbase = csid_dev->base;
-	if (!csidbase || !csid_params) {
-		pr_err("%s:%d csidbase %pK, csid params %pK\n", __func__,
-			__LINE__, csidbase, csid_params);
-		return -EINVAL;
-	}
-
-	desc.arginfo = SCM_ARGS(2, SCM_VAL, SCM_VAL);
-	desc.args[0] = csid_params->phy_sel;
-	desc.args[1] = csid_params->topology;
-
-	CDBG("phy_sel %d, topology %d\n",
-		csid_params->phy_sel, csid_params->topology);
-	if (scm_call2(SCM_SIP_FNID(SCM_SVC_CAMERASS,
-		TOPOLOGY_SYSCALL_ID), &desc)) {
-		pr_err("%s:%d scm call to hypervisor failed\n",
-			__func__, __LINE__);
-		return -EINVAL;
-	}
-	return 0;
-}
-
-static int msm_csid_seccam_reset_pipeline(struct csid_device *csid_dev,
-	struct msm_camera_csid_params *csid_params)
-{
-	void __iomem *csidbase;
-	struct scm_desc desc = {0};
-
-	csidbase = csid_dev->base;
-	if (!csidbase || !csid_params) {
-		pr_err("%s:%d csidbase %pK, csid params %pK\n", __func__,
-			__LINE__, csidbase, csid_params);
-		return -EINVAL;
-	}
-
-	desc.arginfo = SCM_ARGS(2, SCM_VAL, SCM_VAL);
-	desc.args[0] = csid_params->phy_sel;
-	desc.args[1] = csid_params->is_streamon;
-
-	CDBG("phy_sel %d, is_streamon %d\n",
-		csid_params->phy_sel, csid_params->is_streamon);
-	if (scm_call2(SCM_SIP_FNID(SCM_SVC_CAMERASS,
-		STREAM_NOTIF_SYSCALL_ID), &desc)) {
-		pr_err("%s:%d scm call to hypervisor failed\n",
-			__func__, __LINE__);
-		return -EINVAL;
-	}
-	return 0;
-}
-
 static int msm_csid_config(struct csid_device *csid_dev,
 	struct msm_camera_csid_params *csid_params)
 {
@@ -442,26 +386,6 @@ static int msm_csid_config(struct csid_device *csid_dev,
 		pr_err("%s:%d invalid lane count = %d\n",
 			__func__, __LINE__, csid_params->lane_cnt);
 		return -EINVAL;
-	}
-
-	if (csid_params->is_secure == 1) {
-		struct scm_desc desc = {0};
-
-		desc.arginfo = SCM_ARGS(2, SCM_VAL, SCM_VAL);
-		desc.args[0] = csid_params->is_secure;
-		desc.args[1] = CSIPHY_LANES_MASKS[csid_params->phy_sel];
-
-		CDBG("phy_sel : %d, secure : %d\n",
-			csid_params->phy_sel, csid_params->is_secure);
-
-		msm_camera_tz_clear_tzbsp_status();
-
-		if (scm_call2(SCM_SIP_FNID(SCM_SVC_CAMERASS,
-			SECURE_SYSCALL_ID), &desc)) {
-			pr_err("%s:%d scm call to hypervisor failed\n",
-				__func__, __LINE__);
-			return -EINVAL;
-		}
 	}
 
 	csid_dev->csid_lane_cnt = csid_params->lane_cnt;
@@ -827,22 +751,6 @@ static int msm_csid_release(struct csid_device *csid_dev)
 	CDBG("%s:%d, hw_version = 0x%x\n", __func__, __LINE__,
 		csid_dev->hw_version);
 
-	if (csid_dev->current_csid_params.is_secure == 1) {
-		struct scm_desc desc = {0};
-
-		desc.arginfo = SCM_ARGS(2, SCM_VAL, SCM_VAL);
-		desc.args[0] = 0;
-		desc.args[1] = CSIPHY_LANES_MASKS[
-				csid_dev->current_csid_params.phy_sel];
-
-		if (scm_call2(SCM_SIP_FNID(SCM_SVC_CAMERASS,
-			SECURE_SYSCALL_ID), &desc)) {
-			pr_err("%s:%d scm call to hyp with protect 0 failed\n",
-				__func__, __LINE__);
-			return -EINVAL;
-		}
-		msm_camera_tz_clear_tzbsp_status();
-	}
 
 	irq = msm_camera_vio_r(csid_dev->base,
 		csid_dev->ctrl_reg->csid_reg.csid_irq_status_addr,
@@ -954,32 +862,6 @@ static int32_t msm_csid_cmd(struct csid_device *csid_dev, void *arg)
 MEM_CLEAN:
 		for (i--; i >= 0; i--)
 			kfree(csid_params.lut_params.vc_cfg[i]);
-		break;
-	}
-	case CSID_SECCAM_TOPOLOGY: {
-		struct msm_camera_csid_params csid_params;
-
-		if (copy_from_user(&csid_params,
-			(void __user *)cdata->cfg.csid_params,
-			sizeof(struct msm_camera_csid_params))) {
-			pr_err("%s: %d failed\n", __func__, __LINE__);
-			rc = -EFAULT;
-			break;
-		}
-		rc = msm_csid_seccam_send_topology(csid_dev, &csid_params);
-		break;
-	}
-	case CSID_SECCAM_RESET: {
-		struct msm_camera_csid_params csid_params;
-
-		if (copy_from_user(&csid_params,
-			(void __user *)cdata->cfg.csid_params,
-			sizeof(struct msm_camera_csid_params))) {
-			pr_err("%s: %d failed\n", __func__, __LINE__);
-			rc = -EFAULT;
-			break;
-		}
-		rc = msm_csid_seccam_reset_pipeline(csid_dev, &csid_params);
 		break;
 	}
 	case CSID_RELEASE:
@@ -1107,7 +989,6 @@ static int32_t msm_csid_cmd32(struct csid_device *csid_dev, void *arg)
 		csid_params.phy_sel = csid_params32.phy_sel;
 		csid_params.csi_clk = csid_params32.csi_clk;
 		csid_params.csi_3p_sel = csid_params32.csi_3p_sel;
-		csid_params.is_secure = csid_params32.is_secure;
 
 		lut_par32 = csid_params32.lut_params;
 		csid_params.lut_params.num_cid = lut_par32.num_cid;
@@ -1152,41 +1033,6 @@ MEM_CLEAN32:
 			kfree(csid_params.lut_params.vc_cfg[i]);
 			csid_params.lut_params.vc_cfg[i] = NULL;
 		}
-		break;
-	}
-	case CSID_SECCAM_TOPOLOGY: {
-		struct msm_camera_csid_params csid_params;
-		struct msm_camera_csid_params32 csid_params32;
-
-		if (copy_from_user(&csid_params32,
-			(void __user *)compat_ptr(arg32->cfg.csid_params),
-			sizeof(struct msm_camera_csid_params32))) {
-			pr_err("%s: %d failed\n", __func__, __LINE__);
-			rc = -EFAULT;
-			break;
-		}
-
-		csid_params.topology = csid_params32.topology;
-		csid_params.phy_sel = csid_params32.phy_sel;
-
-		rc = msm_csid_seccam_send_topology(csid_dev, &csid_params);
-		break;
-	}
-	case CSID_SECCAM_RESET: {
-		struct msm_camera_csid_params csid_params;
-		struct msm_camera_csid_params32 csid_params32;
-
-		if (copy_from_user(&csid_params32,
-			(void __user *)compat_ptr(arg32->cfg.csid_params),
-			sizeof(struct msm_camera_csid_params32))) {
-			pr_err("%s: %d failed\n", __func__, __LINE__);
-			rc = -EFAULT;
-			break;
-		}
-
-		csid_params.is_streamon = csid_params32.is_streamon;
-		csid_params.phy_sel = csid_params32.phy_sel;
-		rc = msm_csid_seccam_reset_pipeline(csid_dev, &csid_params);
 		break;
 	}
 	case CSID_RELEASE:
