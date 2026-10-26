@@ -2654,6 +2654,18 @@ static int adreno_prop_device_qtimer(struct kgsl_device *device,
 	return copy_prop(param, &qtimerprop, sizeof(qtimerprop));
 }
 
+/* Sony/4.4 userspace (libGLESv2_adreno) still queries the IB timeout */
+static int adreno_prop_ib_timeout(struct kgsl_device *device,
+		struct kgsl_device_getproperty *param)
+{
+	unsigned int ib_timeout = adreno_drawobj_timeout;
+
+	if (ib_timeout == 0)
+		return -EINVAL;
+
+	return copy_prop(param, &ib_timeout, sizeof(ib_timeout));
+}
+
 static int adreno_prop_s32(struct kgsl_device *device,
 		struct kgsl_device_getproperty *param)
 {
@@ -2754,6 +2766,7 @@ static const struct {
 	{ KGSL_PROP_DEVICE_BITNESS, adreno_prop_u32 },
 	{ KGSL_PROP_SPEED_BIN, adreno_prop_u32 },
 	{ KGSL_PROP_GAMING_BIN, adreno_prop_gaming_bin },
+	{ KGSL_PROP_IB_TIMEOUT, adreno_prop_ib_timeout },
 };
 
 static int adreno_getproperty(struct kgsl_device *device,
