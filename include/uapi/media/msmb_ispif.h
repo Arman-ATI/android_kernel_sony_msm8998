@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 #ifndef UAPI_MSMB_ISPIF_H
 #define UAPI_MSMB_ISPIF_H
 
@@ -177,3 +176,4 @@ struct ispif_cfg_data_ext {
 	_IOWR('V', BASE_VIDIOC_PRIVATE+1, struct ispif_cfg_data_ext)
 
 #endif
+
