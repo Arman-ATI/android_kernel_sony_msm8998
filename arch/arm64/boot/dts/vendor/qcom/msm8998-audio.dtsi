@@ -129,8 +129,9 @@
 		status = "ok";
 		compatible = "qcom,audio-ref-clk";
 		qcom,codec-ext-clk-src = <13>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pm8998_gpio_13>;
+		pinctrl-names = "sleep", "active";
+		pinctrl-0 = <&spkr_i2s_clk_sleep>;
+		pinctrl-1 = <&spkr_i2s_clk_active>;
 		qcom,audio-ref-clk-gpio = <&pm8998_gpios 13 0>;
 		clock-names = "osr_clk";
 		clocks = <&clock_rpmcc RPM_SMD_DIV_CLK1>;

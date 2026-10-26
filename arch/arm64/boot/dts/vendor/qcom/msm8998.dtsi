@@ -9,6 +9,11 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2017 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 
 #include "skeleton64.dtsi"
 #include <dt-bindings/clock/qcom,rpmcc.h>
@@ -552,8 +557,8 @@
 			linux,cma-default;
 		};
 
-		cont_splash_mem: splash_region@9d600000 {
-			reg = <0x0 0x9d600000 0x0 0x02400000>;
+		cont_splash_mem: splash_region@9d400000 {
+			reg = <0x0 0x9d400000 0x0 0x02400000>;
 			label = "cont_splash_mem";
 		};
 
@@ -1967,7 +1972,6 @@
 			linux,sysdev_is_parent;
 			snps,nominal-elastic-buffer; /*CHECKME*/
 			snps,disable-clk-gating;
-			snps,has-lpm-erratum;
 			snps,hird-threshold = /bits/ 8 <0x10>;
 			snps,num-gsi-evt-buffs = <0x3>;
 			usb-core-id = <0>;

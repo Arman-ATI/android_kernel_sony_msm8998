@@ -425,19 +425,19 @@
 			label = "rgb";
 			status = "okay";
 
-			red {
+			red_led: red {
 				label = "red";
 				pwms = <&pmi8998_pwms 4 1000000>;
 				led-sources = <0>;
 				linux,default-trigger = "timer";
 			};
-			green {
+			green_led: green {
 				label = "green";
 				pwms = <&pmi8998_pwms 3 1000000>;
 				led-sources = <1>;
 				linux,default-trigger = "timer";
 			};
-			blue {
+			blue_led: blue {
 				label = "blue";
 				pwms = <&pmi8998_pwms 2 1000000>;
 				led-sources = <2>;
