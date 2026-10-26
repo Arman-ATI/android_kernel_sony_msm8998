@@ -451,6 +451,21 @@ sdm630-mtp.dtb \
         sda630-pm660a-qrd-hdk.dtb
 endif
 
+dtb-$(CONFIG_MACH_SONY_MAPLE) += msm8998-yoshino-maple_generic.dtb \
+	msm8998-v2-yoshino-maple_generic.dtb \
+	msm8998-v2.1-yoshino-maple_generic.dtb
+dtb-$(CONFIG_MACH_SONY_MAPLE_DCM) += msm8998-yoshino-maple_dcm.dtb \
+        msm8998-v2-yoshino-maple_dcm.dtb \
+        msm8998-v2.1-yoshino-maple_dcm.dtb
+dtb-$(CONFIG_MACH_SONY_POPLAR) += msm8998-yoshino-poplar_generic.dtb \
+	msm8998-v2-yoshino-poplar_generic.dtb \
+	msm8998-v2.1-yoshino-poplar_generic.dtb
+dtb-$(CONFIG_MACH_SONY_POPLAR_DCM) += msm8998-v2.1-yoshino-poplar_dcm.dtb
+dtb-$(CONFIG_MACH_SONY_LILAC) += msm8998-yoshino-lilac_generic.dtb \
+	msm8998-v2-yoshino-lilac_generic.dtb \
+	msm8998-v2.1-yoshino-lilac_generic.dtb
+dtb-$(CONFIG_MACH_SONY_LILAC_DCM) += msm8998-v2.1-yoshino-lilac_dcm.dtb
+
 always		:= $(dtb-y)
 subdir-y	:= $(dts-dirs)
 clean-files    := *.dtb *.dtbo
