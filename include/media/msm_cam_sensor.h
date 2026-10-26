@@ -1,16 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2016 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
  */
-
 #ifndef __LINUX_MSM_CAM_SENSOR_H
 #define __LINUX_MSM_CAM_SENSOR_H
 
@@ -18,8 +10,6 @@
 #include <uapi/media/msm_camsensor_sdk.h>
 
 #include <linux/compat.h>
-
-#define SECURE_CAM_RST_MODULES
 
 #ifdef CONFIG_COMPAT
 
@@ -72,9 +62,6 @@ struct msm_camera_csid_params32 {
 	uint32_t csi_clk;
 	struct msm_camera_csid_lut_params32 lut_params;
 	uint8_t csi_3p_sel;
-	uint8_t is_secure;
-	uint32_t topology;
-	uint8_t is_streamon;
 };
 
 struct msm_camera_csi2_params32 {
@@ -140,6 +127,9 @@ struct msm_eeprom_cfg_data32 {
 };
 
 struct msm_camera_i2c_seq_reg_setting32 {
+/* extension begin */
+	uint16_t slave_addr;
+/* extension end */
 	compat_uptr_t reg_setting;
 	uint16_t size;
 	enum msm_camera_i2c_reg_addr_type addr_type;
@@ -273,6 +263,13 @@ struct msm_flash_cfg_data_t32 {
 		compat_uptr_t settings;
 	} cfg;
 };
+
+/* extension begin */
+struct msm_sensor_event_data32 {
+	uint32_t sof_count;
+	struct compat_timeval mono_timestamp;
+};
+/* extension end */
 
 #define VIDIOC_MSM_ACTUATOR_CFG32 \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 6, struct msm_actuator_cfg_data32)
