@@ -1812,6 +1812,7 @@
 		compatible = "qcom,ufshc";
 		reg = <0x1da4000 0x2500>, <0x1db0000 0x8000>;
 		reg-names = "ufs_mem", "ufs_ice";
+		qcom,legacy-ice-v2;
 		interrupts = <GIC_SPI 265 IRQ_TYPE_LEVEL_HIGH>;
 		phys = <&ufsphy1>;
 		phy-names = "ufsphy";

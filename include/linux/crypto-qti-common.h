@@ -13,6 +13,9 @@
 #include <linux/delay.h>
 
 #define RAW_SECRET_SIZE 32
+
+/* msm8998-class TZ/ICE v2: legacy SCM key programming + per-request ICE regs */
+extern bool qti_ice_legacy_v2;
 #define QTI_ICE_MAX_BIST_CHECK_COUNT 100
 #define QTI_ICE_TYPE_NAME_LEN 8
 
