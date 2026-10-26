@@ -1,0 +1,179 @@
+/* arch/arm64/boot/dts/qcom/msm8998-yoshino-poplar_dtv.dtsi
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+/*
+ * Copyright (C) 2016 Sony Mobile Communications Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2, as
+ * published by the Free Software Foundation.
+ */
+
+/*
+ * Socionext MN88553 digital TV tuner of the Japanese variants. Not included
+ * by any DT yet; it needs CONFIG_MMTUNER_MN8855x and the Sony DTV HAL.
+ */
+
+&soc {
+	/* SPI: BLSP9 */
+	spi@c1b7000 { /* BLSP2 QUP3 */
+		pinctrl-0 = <&spi_9_active &spi_9_miso_active>;
+		pinctrl-1 = <&spi_9_sleep &spi_9_miso_sleep>;
+		qcom,clk-freq-out = <30000000>;
+		qcom,infinite-mode = <0>;
+		qcom,gpio-clk  = <&tlmm 52 0>;
+		qcom,gpio-cs0  = <&tlmm 51 0>;
+		qcom,gpio-mosi = <&tlmm 49 0>;
+		qcom,gpio-miso = <&tlmm 50 0>;
+		qcom,rt-priority;
+		status = "okay";
+
+		tmm3spi@0 {
+			compatible = "socionext,mn553-spi";
+			reg = <0>;
+			spi-max-frequency = <30000000>;
+			spi-mode = <0>;
+		};
+	};
+
+	dtv_tuner: mn88553 {
+		compatible = "socionext,mn88553";
+		interrupt-parent = <&tlmm>;
+		interrupts = <91 0>;
+		gpios = <&pm8998_gpios 20 0>,  /* DTV_ACTIVE  */
+			<&tlmm 90 0>,  /* DTV_RESET_N */
+			<&tlmm 91 0>;  /* DTV_INT     */
+	};
+};
+
+&somc_pinctrl {
+	pinctrl-2 = <&msm_gpio_49 &msm_gpio_50 &msm_gpio_51 &msm_gpio_52
+		     &msm_gpio_90 &msm_gpio_91 &msm_gpio_92>;
+};
+
+&spi_9_active {
+	qcom,pin-func = <1>;
+	mux {
+		pins = "gpio49", "gpio51", "gpio52";
+		function = "blsp_spi9";
+	};
+
+	config {
+		pins = "gpio49", "gpio51", "gpio52";
+		drive-strength = <2>;
+		bias-disable;
+	};
+};
+
+&spi_9_sleep {
+	qcom,pin-func = <1>;
+	mux {
+		pins = "gpio49", "gpio51", "gpio52";
+		function = "blsp_spi9";
+	};
+
+	config {
+		pins = "gpio49", "gpio51", "gpio52";
+		drive-strength = <2>;
+		bias-disable;
+	};
+};
+
+&tlmm {
+	spi_9_miso {
+		spi_9_miso_active: spi_9_miso_active {
+			qcom,pin-func = <1>;
+			mux {
+				pins = "gpio50";
+				function = "blsp_spi9";
+			};
+
+			config {
+				pins = "gpio50";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+
+		spi_9_miso_sleep: spi_9_miso_sleep {
+			qcom,pin-func = <1>;
+			mux {
+				pins = "gpio50";
+				function = "blsp_spi9";
+			};
+
+			config {
+				pins = "gpio50";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+};
+
+&msm_gpio_49 {
+	/* GPIO_49 : DTV_SPI_MOSI */
+	mux {
+		function = "blsp_spi9";
+	};
+
+	config {
+		bias-disable;
+		/delete-property/ output-low;
+	};
+};
+
+&msm_gpio_50 {
+	/* GPIO_50 : DTV_SPI_MISO */
+	mux {
+		function = "blsp_spi9";
+	};
+
+	config {
+		bias-pull-down;
+		/delete-property/ bias-disable;
+		/delete-property/ output-low;
+	};
+};
+
+&msm_gpio_51 {
+	/* GPIO_51 : DTV_SPI_CS_N */
+	mux {
+		function = "blsp_spi9";
+	};
+
+	config {
+		bias-disable;
+		/delete-property/ output-low;
+	};
+};
+
+&msm_gpio_52 {
+	/* GPIO_52 : DTV_SPI_CLK */
+	mux {
+		function = "blsp_spi9";
+	};
+
+	config {
+		bias-disable;
+		/delete-property/ output-low;
+	};
+};
+
+&msm_gpio_91 {
+	/* GPIO_91 : DTV_INT */
+	config {
+		bias-pull-down;
+		/delete-property/ bias-disable;
+		/delete-property/ output-low;
+		input-enable;
+	};
+};
