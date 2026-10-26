@@ -1,4 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2016 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 #ifndef __UAPI_LINUX_MSM_CAMSENSOR_SDK_H
 #define __UAPI_LINUX_MSM_CAMSENSOR_SDK_H
 
@@ -51,17 +55,13 @@
 
 #define MSM_SENSOR_BYPASS_VIDEO_NODE    1
 
-#define SECURE_CAMERA
-
-#define SECURE_CAM_RST_MODULES
+#define FRONT_AUX_SENSOR_SUPPORT
 
 enum msm_sensor_camera_id_t {
 	CAMERA_0,
 	CAMERA_1,
 	CAMERA_2,
 	CAMERA_3,
-	CAMERA_4,
-	CAMERA_5,
 	MAX_CAMERAS,
 };
 
@@ -77,6 +77,7 @@ enum camb_position_t {
 	BACK_CAMERA_B,
 	FRONT_CAMERA_B,
 	AUX_CAMERA_B = 0x100,
+	FRONT_AUX_CAMERA_B,
 	INVALID_CAMERA_B,
 };
 
@@ -249,10 +250,10 @@ struct msm_sensor_power_setting {
 
 struct msm_sensor_power_setting_array {
 	struct msm_sensor_power_setting  power_setting_a[MAX_POWER_CONFIG];
-	struct msm_sensor_power_setting  *power_setting;
+	struct msm_sensor_power_setting *power_setting;
 	unsigned short size;
 	struct msm_sensor_power_setting  power_down_setting_a[MAX_POWER_CONFIG];
-	struct msm_sensor_power_setting  *power_down_setting;
+	struct msm_sensor_power_setting *power_down_setting;
 	unsigned short size_down;
 };
 
@@ -260,9 +261,6 @@ enum msm_camera_i2c_operation {
 	MSM_CAM_WRITE = 0,
 	MSM_CAM_POLL,
 	MSM_CAM_READ,
-	MSM_CAM_READ_PAGE,
-	MSM_CAM_WRITE_DELAYUSEC,
-	MSM_CAM_READ_CONTINUOUS,
 };
 
 struct msm_sensor_i2c_sync_params {
@@ -359,9 +357,6 @@ struct msm_camera_csid_params {
 	unsigned int csi_clk;
 	struct msm_camera_csid_lut_params lut_params;
 	unsigned char csi_3p_sel;
-	unsigned char is_secure;
-	uint32_t topology;
-	unsigned char is_streamon;
 };
 
 struct msm_camera_csid_testmode_parms {
@@ -390,6 +385,9 @@ struct msm_camera_i2c_seq_reg_array {
 };
 
 struct msm_camera_i2c_seq_reg_setting {
+/* extension begin */
+	unsigned short slave_addr;
+/* extension end */
 	struct msm_camera_i2c_seq_reg_array *reg_setting;
 	unsigned short size;
 	enum msm_camera_i2c_reg_addr_type addr_type;
@@ -417,8 +415,8 @@ struct damping_params_t {
 
 struct region_params_t {
 	/* [0] = ForwardDirection Macro boundary
-	 *  [1] = ReverseDirection Inf boundary
-	 */
+	   [1] = ReverseDirection Inf boundary
+	*/
 	unsigned short step_bound[2];
 	unsigned short code_per_step;
 	/* qvalue for converting float type numbers to integer format */
