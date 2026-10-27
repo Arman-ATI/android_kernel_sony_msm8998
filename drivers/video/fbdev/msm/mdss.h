@@ -1,5 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2012-2018, 2020, The Linux Foundation. All rights reserved. */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2017 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 
 #ifndef MDSS_H
 #define MDSS_H
@@ -29,6 +34,10 @@
 
 #define MDSS_PINCTRL_STATE_DEFAULT "mdss_default"
 #define MDSS_PINCTRL_STATE_SLEEP  "mdss_sleep"
+#ifdef CONFIG_FB_MSM_MDSS_SPECIFIC_PANEL
+#define MDSS_PINCTRL_STATE_TOUCH_ACTIVE "mdss_touch_active"
+#define MDSS_PINCTRL_STATE_TOUCH_SUSPEND  "mdss_touch_suspend"
+#endif /* CONFIG_FB_MSM_MDSS_SPECIFIC_PANEL */
 
 enum mdss_mdp_clk_type {
 	MDSS_CLK_AHB,

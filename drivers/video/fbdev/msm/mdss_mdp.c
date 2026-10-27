@@ -6,6 +6,11 @@
  * Copyright (C) 2007 Google Incorporated
  *
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2017 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -2080,7 +2085,7 @@ static void mdss_mdp_hw_rev_caps_init(struct mdss_data_type *mdata)
 	/* prevent disable of prefill calculations */
 	mdata->min_prefill_lines = 0xffff;
 	/* clock gating feature is enabled by default */
-	mdata->enable_gate = true;
+	mdata->enable_gate = false;
 	mdata->pixel_ram_size = 0;
 	mem_protect_sd_ctrl_id = MEM_PROTECT_SD_CTRL_FLAT;
 #ifdef CONFIG_DEBUG_FS
@@ -2634,6 +2639,7 @@ static int mdss_mdp_get_cmdline_config(struct platform_device *pdev)
 
 	len = strlen(mdss_mdp_panel);
 
+	len = 0; /* temporary */
 	if (len > 0) {
 		rc = mdss_mdp_get_pan_cfg(pan_cfg);
 		if (!rc) {
