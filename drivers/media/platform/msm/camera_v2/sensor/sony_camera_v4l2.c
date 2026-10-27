@@ -25,6 +25,7 @@
 #include <linux/stat.h>
 #include <linux/kthread.h>
 #include <linux/thermal.h>
+#include <linux/of_irq.h>
 #include "camera.h"
 #include "msm_sensor.h"
 #include "msm_camera_i2c.h"
@@ -2079,7 +2080,7 @@ static int sony_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	}
 	LOGE("%s: id = %d, sof_gpio %d %p\n", __func__, id, camera_data[id].sof_gpio, dev_name(camera_data[id].d));
 	if (camera_data[id].sof_gpio >= 0) {
-		camera_data[id].sof_irq = gpio_to_irq(camera_data[id].sof_gpio);
+		camera_data[id].sof_irq = irq_of_parse_and_map(camera_data[id].d->of_node, 0);
 		rc = request_threaded_irq(camera_data[id].sof_irq, NULL,
 			sony_sensor_sof_irq,
 			IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
@@ -2432,7 +2433,7 @@ static struct sony_camera_data camera_data[] = {
 	},
 };
 
-module_init(sony_sensor_init_module);
+late_initcall_sync(sony_sensor_init_module);
 module_exit(sony_sensor_exit_module);
 
 MODULE_DESCRIPTION("SONY V4L2 camera sensor driver");
