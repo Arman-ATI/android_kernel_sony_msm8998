@@ -79,6 +79,7 @@ obj-$(CONFIG_NUBUS)		+= nubus/
 obj-y				+= macintosh/
 obj-$(CONFIG_IDE)		+= ide/
 obj-$(CONFIG_CRYPTO)		+= crypto/
+obj-$(CONFIG_SWITCH)		+= switch/
 obj-$(CONFIG_EXTCON)		+= extcon/
 obj-y				+= scsi/
 obj-y				+= nvme/
