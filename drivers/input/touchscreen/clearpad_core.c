@@ -4326,6 +4326,7 @@ static void clearpad_funcarea_initialize(struct clearpad_t *this)
 			input_set_abs_params(this->input, ABS_MT_TOOL_TYPE,
 					0, this->pen.enabled ? MT_TOOL_PEN :
 							MT_TOOL_FINGER, 0, 0);
+			input_set_capability(this->input, EV_KEY, BTN_TOUCH);
 			break;
 		case SYN_FUNCAREA_BUTTON:
 			button =
@@ -4438,6 +4439,7 @@ static void clearpad_funcarea_down(struct clearpad_t *this,
 			break;
 		touch_major = max(cur->wx, cur->wy) + 1;
 		touch_minor = min(cur->wx, cur->wy) + 1;
+		input_report_key(idev, BTN_TOUCH, 1);
 		input_report_abs(idev, ABS_MT_TRACKING_ID, cur->id);
 		input_report_abs(idev, ABS_MT_TOOL_TYPE, cur->tool);
 		input_report_abs(idev, ABS_MT_POSITION_X, cur->x);
@@ -4481,6 +4483,7 @@ static void clearpad_funcarea_up(struct clearpad_t *this,
 		LOG_EVENT(this, "%s up\n", valid ? "pt" : "unused pt");
 		if (!valid)
 			break;
+		input_report_key(idev, BTN_TOUCH, 0);
 		input_mt_sync(idev);
 		break;
 	case SYN_FUNCAREA_BUTTON:
