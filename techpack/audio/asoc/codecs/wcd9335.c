@@ -2,6 +2,11 @@
 /*
  * Copyright (c) 2015-2019, 2021, The Linux Foundation. All rights reserved.
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2016 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/firmware.h>
@@ -1687,7 +1692,7 @@ static inline void tasha_mbhc_get_result_params(struct wcd9xxx *wcd9xxx,
 	if ((c1 < 2) && x1)
 		usleep_range(5000, 5050);
 
-	if (!c1 || !x1) {
+	if (!c1) {
 		dev_dbg(wcd9xxx->dev,
 			"%s: Impedance detect ramp error, c1=%d, x1=0x%x\n",
 			__func__, c1, x1);
@@ -5231,6 +5236,22 @@ static int tasha_codec_config_ear_spkr_gain(struct snd_soc_component *component,
 	return 0;
 }
 
+static void tasha_codec_set_offset_val(int *offset_val, int gain_offset,
+				       int mult)
+{
+	switch (gain_offset) {
+	case RX_GAIN_OFFSET_M0P5_DB:
+		*offset_val = 1 * mult;
+		break;
+	case RX_GAIN_OFFSET_M1P5_DB:
+		*offset_val = 2 * mult;
+		break;
+	default:
+		pr_err("Improper gain offset\n");
+		break;
+	}
+}
+
 static int tasha_codec_enable_mix_path(struct snd_soc_dapm_widget *w,
 		struct snd_kcontrol *kcontrol, int event)
 {
@@ -5279,7 +5300,7 @@ static int tasha_codec_enable_mix_path(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
-		if ((tasha->spkr_gain_offset == RX_GAIN_OFFSET_M1P5_DB) &&
+		if ((tasha->spkr_gain_offset != RX_GAIN_OFFSET_0_DB) &&
 		    (tasha->comp_enabled[COMPANDER_7] ||
 		     tasha->comp_enabled[COMPANDER_8]) &&
 		    (gain_reg == WCD9335_CDC_RX7_RX_VOL_MIX_CTL ||
@@ -5296,7 +5317,8 @@ static int tasha_codec_enable_mix_path(struct snd_soc_dapm_widget *w,
 			snd_soc_component_update_bits(component,
 					WCD9335_CDC_RX8_RX_PATH_MIX_SEC0,
 					0x01, 0x01);
-			offset_val = -2;
+			tasha_codec_set_offset_val(&offset_val,
+						   tasha->spkr_gain_offset, -1);
 		}
 		val = snd_soc_component_read32(component, gain_reg);
 		val += offset_val;
@@ -5304,7 +5326,7 @@ static int tasha_codec_enable_mix_path(struct snd_soc_dapm_widget *w,
 		tasha_codec_config_ear_spkr_gain(component, event, gain_reg);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
-		if ((tasha->spkr_gain_offset == RX_GAIN_OFFSET_M1P5_DB) &&
+		if ((tasha->spkr_gain_offset != RX_GAIN_OFFSET_0_DB) &&
 		    (tasha->comp_enabled[COMPANDER_7] ||
 		     tasha->comp_enabled[COMPANDER_8]) &&
 		    (gain_reg == WCD9335_CDC_RX7_RX_VOL_MIX_CTL ||
@@ -5321,7 +5343,8 @@ static int tasha_codec_enable_mix_path(struct snd_soc_dapm_widget *w,
 			snd_soc_component_update_bits(component,
 					WCD9335_CDC_RX8_RX_PATH_MIX_SEC0,
 					0x01, 0x00);
-			offset_val = 2;
+			tasha_codec_set_offset_val(&offset_val,
+						   tasha->spkr_gain_offset, 1);
 			val = snd_soc_component_read32(component, gain_reg);
 			val += offset_val;
 			snd_soc_component_write(component, gain_reg, val);
@@ -5526,7 +5549,7 @@ static int tasha_codec_enable_interpolator(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_POST_PMU:
 		tasha_config_compander(component, w->shift, event);
 		/* apply gain after int clk is enabled */
-		if ((tasha->spkr_gain_offset == RX_GAIN_OFFSET_M1P5_DB) &&
+		if ((tasha->spkr_gain_offset != RX_GAIN_OFFSET_0_DB) &&
 		    (tasha->comp_enabled[COMPANDER_7] ||
 		     tasha->comp_enabled[COMPANDER_8]) &&
 		    (gain_reg == WCD9335_CDC_RX7_RX_VOL_CTL ||
@@ -5543,7 +5566,8 @@ static int tasha_codec_enable_interpolator(struct snd_soc_dapm_widget *w,
 			snd_soc_component_update_bits(component,
 					WCD9335_CDC_RX8_RX_PATH_MIX_SEC0,
 					0x01, 0x01);
-			offset_val = -2;
+			tasha_codec_set_offset_val(&offset_val,
+						   tasha->spkr_gain_offset, -1);
 		}
 		val = snd_soc_component_read32(component, gain_reg);
 		val += offset_val;
@@ -5553,7 +5577,7 @@ static int tasha_codec_enable_interpolator(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_POST_PMD:
 		tasha_config_compander(component, w->shift, event);
 		tasha_codec_enable_prim_interpolator(component, reg, event);
-		if ((tasha->spkr_gain_offset == RX_GAIN_OFFSET_M1P5_DB) &&
+		if ((tasha->spkr_gain_offset != RX_GAIN_OFFSET_0_DB) &&
 		    (tasha->comp_enabled[COMPANDER_7] ||
 		     tasha->comp_enabled[COMPANDER_8]) &&
 		    (gain_reg == WCD9335_CDC_RX7_RX_VOL_CTL ||
@@ -5570,7 +5594,8 @@ static int tasha_codec_enable_interpolator(struct snd_soc_dapm_widget *w,
 			snd_soc_component_update_bits(component,
 					WCD9335_CDC_RX8_RX_PATH_MIX_SEC0,
 					0x01, 0x00);
-			offset_val = 2;
+			tasha_codec_set_offset_val(&offset_val,
+						   tasha->spkr_gain_offset, 1);
 			val = snd_soc_component_read32(component, gain_reg);
 			val += offset_val;
 			snd_soc_component_write(component, gain_reg, val);
@@ -13958,7 +13983,7 @@ static int tasha_codec_probe(struct snd_soc_component *component)
 	for (i = 0; i < COMPANDER_MAX; i++)
 		tasha->comp_enabled[i] = 0;
 
-	tasha->spkr_gain_offset = RX_GAIN_OFFSET_0_DB;
+	tasha->spkr_gain_offset = RX_GAIN_OFFSET_M0P5_DB;
 	tasha->intf_type = wcd9xxx_get_intf_type();
 	tasha_update_reg_reset_values(component);
 	pr_debug("%s: MCLK Rate = %x\n", __func__, control->mclk_rate);

@@ -128,6 +128,7 @@ enum {
  */
 enum {
 	RX_GAIN_OFFSET_M1P5_DB,
+	RX_GAIN_OFFSET_M0P5_DB,
 	RX_GAIN_OFFSET_0_DB,
 };
 
