@@ -10,6 +10,11 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2015 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
@@ -2502,7 +2507,10 @@ int mmc_set_uhs_voltage(struct mmc_host *host, u32 ocr)
 	}
 
 	/* Wait for at least 1 ms according to spec */
-	mmc_delay(1);
+	if (host->caps & MMC_CAP_NONREMOVABLE)
+		mmc_delay(1);
+	else
+		mmc_delay(40);
 
 	/*
 	 * Failure to switch is indicated by the card holding
@@ -3537,9 +3545,12 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 		if (!mmc_attach_sdio(host))
 			return 0;
 
-	if (!(host->caps2 & MMC_CAP2_NO_SD))
+	if (!(host->caps2 & MMC_CAP2_NO_SD)) {
 		if (!mmc_attach_sd(host))
 			return 0;
+		else
+			mmc_gpio_tray_close_set_uim2(host, 1);
+	}
 
 	if (!(host->caps2 & MMC_CAP2_NO_MMC))
 		if (!mmc_attach_mmc(host))
@@ -3735,6 +3746,8 @@ void mmc_stop_host(struct mmc_host *host)
 	host->rescan_disable = 1;
 	cancel_delayed_work_sync(&host->detect);
 
+	mmc_gpio_set_uim2_en(host, 0);
+
 	/* clear pm flags now and let card drivers set them as needed */
 	host->pm_flags = 0;
 
@@ -3778,6 +3791,9 @@ static int mmc_pm_notify(struct notifier_block *notify_block,
 		host->rescan_disable = 1;
 		spin_unlock_irqrestore(&host->lock, flags);
 		cancel_delayed_work_sync(&host->detect);
+#ifdef CONFIG_MMC_BLOCK_DEFERRED_RESUME
+		mmc_cd_prepare_suspend(host);
+#endif
 
 		if (!host->bus_ops)
 			break;
