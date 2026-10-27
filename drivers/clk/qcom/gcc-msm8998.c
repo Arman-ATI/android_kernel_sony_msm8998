@@ -418,6 +418,18 @@ static struct freq_tbl ftbl_blsp_qup_spi_apps_clk_src[] = {
 	{ }
 };
 
+static struct freq_tbl ftbl_blsp2_qup3_spi_apps_clk_src[] = {
+	F(    960000,	P_BI_TCXO,      10,    1,     2),
+	F(   4800000,	P_BI_TCXO,       4,    0,     0),
+	F(   9600000,	P_BI_TCXO,       2,    0,     0),
+	F(  15000000,	P_GPLL0,        10,    1,     4),
+	F(  19200000,	P_BI_TCXO,       1,    0,     0),
+	F(  25000000,	P_GPLL0,        12,    1,     2),
+	F(  30000000,	P_GPLL0,        10,    1,     2),
+	F(  50000000,	P_GPLL0,        12,    0,     0),
+	{ }
+};
+
 static struct clk_rcg2 blsp1_qup1_spi_apps_clk_src = {
 	.cmd_rcgr = 0x1900c,
 	.mnd_width = 8,
@@ -746,7 +758,7 @@ static struct clk_rcg2 blsp2_qup3_spi_apps_clk_src = {
 	.mnd_width = 8,
 	.hid_width = 5,
 	.parent_map = gcc_parent_map_2,
-	.freq_tbl = ftbl_blsp_qup_spi_apps_clk_src,
+	.freq_tbl = ftbl_blsp2_qup3_spi_apps_clk_src,
 	.enable_safe_config = true,
 	.clkr.hw.init = &(struct clk_init_data) {
 		.name = "blsp2_qup3_spi_apps_clk_src",
