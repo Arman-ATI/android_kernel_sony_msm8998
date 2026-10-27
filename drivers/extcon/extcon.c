@@ -193,6 +193,13 @@ static const struct __extcon_info {
 		.name = "MECHANICAL",
 	},
 
+	/* Somc Extention */
+	[EXTCON_VBUS_DROP] = {
+		.type = EXTCON_TYPE_MISC,
+		.id = EXTCON_VBUS_DROP,
+		.name = "VBUS-DROP",
+	},
+
 	{ /* sentinel */ }
 };
 
