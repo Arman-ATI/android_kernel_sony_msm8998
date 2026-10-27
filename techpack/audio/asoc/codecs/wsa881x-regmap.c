@@ -2,6 +2,11 @@
 /*
  * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2016 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 
 #include <linux/regmap.h>
 #include <linux/device.h>
@@ -166,7 +171,7 @@ static struct reg_sequence wsa881x_rev_2_0[] = {
 	{WSA881X_SPKR_BIAS_INT, 0x5F, 0x00},
 	{WSA881X_SPKR_BIAS_PSRR, 0x44, 0x00},
 	{WSA881X_BOOST_PS_CTL, 0xA0, 0x00},
-	{WSA881X_BOOST_PRESET_OUT1, 0xB7, 0x00},
+	{WSA881X_BOOST_PRESET_OUT1, 0x37, 0x00},
 	{WSA881X_BOOST_LOOP_STABILITY, 0x8D, 0x00},
 	{WSA881X_SPKR_PROT_ATEST2, 0x02, 0x00},
 	{WSA881X_BONGO_RESRV_REG1, 0x5E, 0x00},
