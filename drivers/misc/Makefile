@@ -84,6 +84,7 @@ obj-$(CONFIG_QPNP_MISC) 	+= qpnp-misc.o
 obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
 obj-$(CONFIG_NFC_PN553_DEVICES) += pn553.o
 CFLAGS_pn553.o += -Wno-enum-conversion
+obj-$(CONFIG_NFC_CARILLON)      += carillon/
 obj-$(CONFIG_TOF_SENSOR) += tof_sensor.o
 obj-$(CONFIG_SENSORS_TCS3490) += tcs3490.o
 CFLAGS_tcs3490.o += -Wno-misleading-indentation
