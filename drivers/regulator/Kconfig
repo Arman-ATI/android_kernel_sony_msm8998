@@ -744,6 +744,12 @@ config REGULATOR_QPNP_LABIBB
           negative boost regulator. LAB/IBB regulators can also be used
           together for LCD or AMOLED on QTI PMICs like PMI8998.
 
+config SOMC_LCD_OCP_ENABLED
+	bool "enable SoMC LCD OCP function"
+	depends on REGULATOR_QPNP_LABIBB
+	help
+	  Select this to enable SoMC LCD Over current protection function.
+
 config REGULATOR_QPNP_LCDB
         tristate "Qualcomm Technologies, Inc. QPNP LCDB support"
         depends on SPMI
