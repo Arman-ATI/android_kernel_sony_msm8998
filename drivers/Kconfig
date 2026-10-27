@@ -165,6 +165,8 @@ source "drivers/soc/Kconfig"
 
 source "drivers/devfreq/Kconfig"
 
+source "drivers/switch/Kconfig"
+
 source "drivers/extcon/Kconfig"
 
 source "drivers/memory/Kconfig"
