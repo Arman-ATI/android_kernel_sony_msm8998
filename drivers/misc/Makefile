@@ -83,4 +83,6 @@ obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
 obj-$(CONFIG_QPNP_MISC) 	+= qpnp-misc.o
 obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
 obj-$(CONFIG_TOF_SENSOR) += tof_sensor.o
+obj-$(CONFIG_SENSORS_TCS3490) += tcs3490.o
+CFLAGS_tcs3490.o += -Wno-misleading-indentation
 obj-$(CONFIG_POWERKEY_FORCECRASH) += powerkey_forcecrash.o
