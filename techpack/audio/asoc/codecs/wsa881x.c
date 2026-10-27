@@ -2,6 +2,11 @@
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2017 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -1240,7 +1245,7 @@ static void wsa881x_init(struct snd_soc_component *component)
 	if (snd_soc_component_read32(component, WSA881X_OTP_REG_0))
 		snd_soc_component_update_bits(component,
 				WSA881X_BOOST_PRESET_OUT1,
-				0xF0, 0x70);
+				0xFF, 0x7F);
 	snd_soc_component_update_bits(component, WSA881X_BOOST_PRESET_OUT2,
 			0xF0, 0x30);
 	snd_soc_component_update_bits(component, WSA881X_SPKR_DRV_EN,
@@ -1562,6 +1567,8 @@ static int wsa881x_swr_probe(struct swr_device *pdev)
 			__func__);
 		goto dev_err;
 	}
+	mutex_init(&wsa881x->res_lock);
+	mutex_init(&wsa881x->temp_lock);
 
 	wsa881x->bolero_np = of_parse_phandle(pdev->dev.of_node,
 					      "qcom,bolero-handle", 0);
@@ -1592,9 +1599,6 @@ static int wsa881x_swr_probe(struct swr_device *pdev)
 	} else {
 		dev_info(&pdev->dev, "%s: bolero node not found\n", __func__);
 	}
-
-	mutex_init(&wsa881x->res_lock);
-	mutex_init(&wsa881x->temp_lock);
 
 	return 0;
 
