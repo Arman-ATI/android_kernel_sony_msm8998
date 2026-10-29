@@ -907,7 +907,7 @@ static int pp_gamut_set_config(char __iomem *base_addr,
 			gamut_val = gamut_data->c1_c2_data[i][j + 1];
 			gamut_val = (gamut_val << 32) |
 					gamut_data->c0_data[i][j];
-			writeq_relaxed_no_log(gamut_val,
+			writeq_relaxed(gamut_val,
 					base_addr + GAMUT_TABLE_UPPER_R);
 		}
 
