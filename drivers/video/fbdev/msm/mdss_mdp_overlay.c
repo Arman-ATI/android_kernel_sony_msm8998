@@ -6524,11 +6524,20 @@ int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 	mutex_init(&mdp5_data->cwb.cwb_sync_pt_data.sync_mutex);
 	INIT_LIST_HEAD(&mdp5_data->cwb.data_queue);
 	INIT_LIST_HEAD(&mdp5_data->cwb.cleanup_queue);
+	BLOCKING_INIT_NOTIFIER_HEAD(&mdp5_data->cwb.notifier_head);
+	blocking_notifier_chain_register(&mdp5_data->cwb.notifier_head,
+			&mdp5_data->cwb.cwb_sync_pt_data.notifier);
+	mdp5_data->cwb.cwb_work_queue = alloc_ordered_workqueue("mdss_cwb",
+		WQ_UNBOUND | WQ_MEM_RECLAIM);
+	if (!mdp5_data->cwb.cwb_work_queue) {
+		rc = -ENOMEM;
+		goto init_fail;
+	}
 	INIT_WORK(&mdp5_data->cwb.cwb_work, __cwb_wq_handler);
 
 	rc = mdss_mdp_overlay_fb_parse_dt(mfd);
 	if (rc)
-		return rc;
+		goto init_fail;
 
 	/*
 	 * disable BWC if primary panel is video mode on specific
@@ -6658,6 +6667,8 @@ int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 		pr_warn("Failed to initialize pp overlay data.\n");
 	return rc;
 init_fail:
+	if (mdp5_data->cwb.cwb_work_queue)
+		destroy_workqueue(mdp5_data->cwb.cwb_work_queue);
 	kfree(mdp5_data);
 	return rc;
 }
