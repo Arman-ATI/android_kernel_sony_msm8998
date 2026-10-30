@@ -269,12 +269,12 @@ static inline uint64_t __qdf_get_monotonic_boottime(void)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
 static inline uint64_t __qdf_get_log_timestamp(void)
 {
-	return arch_counter_get_cntvct();
+	return arch_timer_read_counter();
 }
 #else
 static inline uint64_t __qdf_get_log_timestamp(void)
 {
-	return arch_counter_get_cntpct();
+	return arch_timer_read_counter();
 }
 #endif /* LINUX_VERSION_CODE */
 #else

@@ -420,7 +420,7 @@ static u64 us_to_ticks(uint64_t sleep_val)
 	wakeup = (u64)sleep_val * ARCH_TIMER_HZ;
 
 	if (sleep_val)
-		wakeup += arch_counter_get_cntvct();
+		wakeup += arch_timer_read_counter();
 	else
 		wakeup = (~0ULL);
 
@@ -445,7 +445,7 @@ static int system_pm_update_wakeup(bool from_idle)
 	}
 
 	msm_mpm_timer_write((uint32_t *)&wakeup);
-	trace_mpm_wakeup_time(from_idle, wakeup, arch_counter_get_cntvct());
+	trace_mpm_wakeup_time(from_idle, wakeup, arch_timer_read_counter());
 
 	return 0;
 }

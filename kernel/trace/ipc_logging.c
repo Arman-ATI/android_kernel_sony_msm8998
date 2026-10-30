@@ -427,7 +427,7 @@ EXPORT_SYMBOL(tsv_timestamp_write);
 int tsv_qtimer_write(struct encode_context *ectxt)
 {
 	int ret;
-	uint64_t t_now = arch_counter_get_cntvct();
+	uint64_t t_now = arch_timer_read_counter();
 
 	ret = tsv_write_header(ectxt, TSV_TYPE_QTIMER, sizeof(t_now));
 	if (ret)

@@ -425,7 +425,7 @@ struct cnss_plat_data {
 #ifdef CONFIG_ARCH_QCOM
 static inline u64 cnss_get_host_timestamp(struct cnss_plat_data *plat_priv)
 {
-	u64 ticks = arch_counter_get_cntvct();
+	u64 ticks = arch_timer_read_counter();
 
 	do_div(ticks, TIME_CLOCK_FREQ_HZ / 100000);
 

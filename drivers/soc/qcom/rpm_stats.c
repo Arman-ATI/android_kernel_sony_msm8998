@@ -90,7 +90,7 @@ static inline int msm_rpmstats_append_data_to_buf(char *buf,
 
 	time_in_last_mode = data->last_exited_at - data->last_entered_at;
 	time_in_last_mode = get_time_in_msec(time_in_last_mode);
-	time_since_last_mode = arch_counter_get_cntvct() - data->last_exited_at;
+	time_since_last_mode = arch_timer_read_counter() - data->last_exited_at;
 	time_since_last_mode = get_time_in_sec(time_since_last_mode);
 	actual_last_sleep = get_time_in_msec(data->accumulated);
 

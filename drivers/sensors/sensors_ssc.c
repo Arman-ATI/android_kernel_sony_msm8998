@@ -287,7 +287,7 @@ static u32 sns_read_qtimer(void)
 {
 	u64 val;
 
-	val = arch_counter_get_cntvct();
+	val = arch_timer_read_counter();
 	/*
 	 * To convert ticks from 19.2 Mhz clock to 32768 Hz clock:
 	 * x = (value * 32768) / 19200000

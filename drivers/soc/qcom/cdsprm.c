@@ -610,7 +610,7 @@ static void process_delayed_rm_request(struct work_struct *work)
 	mutex_lock(&gcdsprm.rm_lock);
 
 	timestamp = gcdsprm.timestamp;
-	curr_timestamp = arch_counter_get_cntvct();
+	curr_timestamp = arch_timer_read_counter();
 
 	while ((gcdsprm.latency_request ==
 					gcdsprm.qos_latency_us) &&
@@ -629,7 +629,7 @@ static void process_delayed_rm_request(struct work_struct *work)
 
 		gcdsprm.dt_state = CDSP_DELAY_THREAD_AFTER_SLEEP;
 		timestamp = gcdsprm.timestamp;
-		curr_timestamp = arch_counter_get_cntvct();
+		curr_timestamp = arch_timer_read_counter();
 	}
 
 	set_qos_latency(PM_QOS_RESUME_LATENCY_DEFAULT_VALUE);
