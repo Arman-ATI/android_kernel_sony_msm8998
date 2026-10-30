@@ -2554,6 +2554,7 @@ static int pp_dspp_setup(u32 disp_num, struct mdss_mdp_mixer *mixer,
 		}
 	}
 	if (flags & PP_FLAGS_DIRTY_PA_DITHER &&
+		(pp_program_mask & PP_PROGRAM_PA_DITHER) &&
 		pp_ops[PA_DITHER].pp_set_config) {
 		pp_ops[PA_DITHER].pp_set_config(base, pp_sts,
 					&mdss_pp_res->pa_dither_cfg[disp_num],
