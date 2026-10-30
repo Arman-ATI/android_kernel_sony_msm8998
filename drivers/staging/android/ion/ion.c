@@ -572,46 +572,40 @@ static int ion_sgl_sync_range(struct device *dev, struct scatterlist *sgl,
 	int i;
 	struct scatterlist *sg;
 	unsigned int len = 0;
-	dma_addr_t sg_dma_addr;
-
-	for_each_sg(sgl, sg, nents, i) {
-		if (sg_dma_len(sg) == 0)
-			break;
-
-		if (i > 0) {
-			pr_warn_ratelimited("Partial cmo only supported with 1 segment\n"
-				"is dma_set_max_seg_size being set on dev:%s\n",
-				dev_name(dev));
-			return -EINVAL;
-		}
-	}
 
 	for_each_sg(sgl, sg, nents, i) {
 		unsigned int sg_offset, sg_left, size = 0;
-
-		if (i == 0)
-			sg_dma_addr = sg_dma_address(sg);
+		struct scatterlist range_sg;
 
 		len += sg->length;
-		if (len <= offset) {
-			sg_dma_addr += sg->length;
+		if (len <= offset)
 			continue;
-		}
 
 		sg_left = len - offset;
 		sg_offset = sg->length - sg_left;
 
 		size = (length < sg_left) ? length : sg_left;
+
+		/*
+		 * The dma address of an entry is a physical address for the
+		 * buffer's own table but an IOVA for a device attachment, and
+		 * sg_dma_len() may cover merged entries. Neither can address
+		 * a sub range, so describe it by its page and physical
+		 * address like ion_pages_sync_for_device() does.
+		 */
+		sg_init_table(&range_sg, 1);
+		sg_set_page(&range_sg, sg_page(sg), size,
+			    sg->offset + sg_offset);
+		sg_dma_address(&range_sg) = sg_phys(sg) + sg_offset;
+		sg_dma_len(&range_sg) = size;
+
 		if (for_cpu)
-			dma_sync_single_range_for_cpu(dev, sg_dma_addr,
-						      sg_offset, size, dir);
+			dma_sync_sg_for_cpu(dev, &range_sg, 1, dir);
 		else
-			dma_sync_single_range_for_device(dev, sg_dma_addr,
-							 sg_offset, size, dir);
+			dma_sync_sg_for_device(dev, &range_sg, 1, dir);
 
 		offset += size;
 		length -= size;
-		sg_dma_addr += sg->length;
 
 		if (length == 0)
 			break;
