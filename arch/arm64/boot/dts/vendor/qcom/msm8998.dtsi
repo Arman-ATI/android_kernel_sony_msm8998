@@ -2292,6 +2292,7 @@
 		      <0x00179000 0x004>;
 		reg-names = "qdsp6_base", "halt_q6", "halt_modem",
 			    "halt_nc", "rmb_base", "restart_reg";
+		qcom,pas-id = <4>;
 
 		clocks = <&clock_rpmcc RPM_SMD_XO_CLK_SRC>,
 			 <&clock_gcc GCC_MSS_CFG_AHB_CLK>,
