@@ -1504,11 +1504,11 @@
 	chan@14 { /* USB_DETECT_ADC */
 		label = "usb_detect";
 		reg = <0x14>;
-		qcom,decimation = <0>;
+		qcom,decimation = <256>;
 		qcom,pre-div-channel-scaling = <0>;
 		qcom,calibration-type = "absolute";
 		qcom,scale-function = <0>;
-		qcom,hw-settle-time = <5>;
+		qcom,hw-settle-time = <6>;
 		qcom,fast-avg-setup = <0>;
 	};
 
@@ -1519,7 +1519,7 @@
 	chan@4e {
 		label = "ufs_therm";
 		reg = <0x4e>;
-		qcom,decimation = <2>;
+		qcom,decimation = <1024>;
 		qcom,pre-div-channel-scaling = <0>;
 		qcom,calibration-type = "ratiometric";
 		qcom,scale-function = <17>;
@@ -1531,7 +1531,7 @@
 	chan@4f {
 		label = "pa_therm1";
 		reg = <0x4f>;
-		qcom,decimation = <2>;
+		qcom,decimation = <1024>;
 		qcom,pre-div-channel-scaling = <0>;
 		qcom,calibration-type = "ratiometric";
 		qcom,scale-function = <2>;
@@ -1543,7 +1543,7 @@
 	chan@50 {
 		label = "pa_therm2";
 		reg = <0x50>;
-		qcom,decimation = <2>;
+		qcom,decimation = <1024>;
 		qcom,pre-div-channel-scaling = <0>;
 		qcom,calibration-type = "ratiometric";
 		qcom,scale-function = <2>;
@@ -1559,7 +1559,7 @@
 	chan@53 {
 		label = "flash_therm";
 		reg = <0x53>;
-		qcom,decimation = <2>;
+		qcom,decimation = <1024>;
 		qcom,pre-div-channel-scaling = <0>;
 		qcom,calibration-type = "ratiometric";
 		qcom,scale-function = <17>;
