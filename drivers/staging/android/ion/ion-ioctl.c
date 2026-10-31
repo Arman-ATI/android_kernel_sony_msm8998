@@ -121,8 +121,12 @@ static long ion_legacy_custom_ioctl(const struct ion_custom_data *custom)
 			   sizeof(flush_data)))
 		return -EFAULT;
 
+	/*
+	 * The legacy handle is the dmabuf fd. Callers do not fill in
+	 * flush_data.fd, so it must not be used to pick the buffer.
+	 */
 	return ion_legacy_cache_ioctl(custom->cmd, flush_data.handle,
-				      flush_data.fd, flush_data.offset,
+				      -1, flush_data.offset,
 				      flush_data.length);
 }
 #endif
