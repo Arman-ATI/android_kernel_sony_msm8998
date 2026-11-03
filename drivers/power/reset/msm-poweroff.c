@@ -6,6 +6,7 @@
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/init.h>
+#include <linux/interrupt.h>
 #include <linux/kernel.h>
 
 #include <linux/io.h>
@@ -76,6 +77,55 @@ static bool scm_dload_supported;
 #endif
 
 static bool force_warm_reboot;
+#ifdef CONFIG_QCOM_EDL_900E_ENTRY
+static bool dload_sysfs_ready;
+#endif
+
+#ifdef CONFIG_QCOM_WARM_REBOOT_EDL_900E_ENTRY
+#define EDL_900E_BACKSTOP_GRACE_MS	(5 * MSEC_PER_SEC)
+#define EDL_900E_BACKSTOP_POLL_MS	MSEC_PER_SEC
+
+static bool msm_restart_ready;
+
+void qcom_warm_reboot_900e_maybe_intercept(const char *cmd)
+{
+	unsigned long deadline;
+
+	/*
+	 * TWRP's GUI supplies an empty RESTART2 target. The AOSP/TWRP
+	 * /system/bin/reboot tool supplies "shell" for an ADB-initiated
+	 * ordinary reboot. Leave NULL kernel-internal restarts and every
+	 * explicit reboot target alone.
+	 */
+	pr_emerg("qcom-edl-900e: restart cmd='%s' ready=%d warm=%d panic=%d mode=%d\n",
+		 cmd ? cmd : "<null>", msm_restart_ready, force_warm_reboot,
+		 in_panic, restart_mode);
+
+	if (!msm_restart_ready || !force_warm_reboot || in_panic ||
+	    restart_mode == RESTART_DLOAD || !cmd ||
+	    (cmd[0] && strcmp(cmd, "shell")))
+		return;
+
+	pr_emerg("qcom-edl-900e: intercepting early warm reboot target '%s'\n",
+		 cmd);
+
+	if (!qcom_edl_900e_arm())
+		panic("qcom-edl-900e: warm-reboot handoff arm failed");
+
+	/*
+	 * Do not enter kernel_restart_prepare(): the timer requires the normal
+	 * CPUs, IRQs, devices, and workqueues to remain available. Park this
+	 * process-context caller until the softirq fault takes the QCOM panic
+	 * path, with a bounded direct-panic fallback if the worker cannot run.
+	 */
+	deadline = jiffies + msecs_to_jiffies(QCOM_EDL_900E_DELAY_MS +
+					       EDL_900E_BACKSTOP_GRACE_MS);
+	while (time_before(jiffies, deadline))
+		msleep(EDL_900E_BACKSTOP_POLL_MS);
+
+	panic("qcom-edl-900e: timed warm-reboot handoff failed");
+}
+#endif
 
 #ifdef CONFIG_QCOM_DLOAD_MODE
 /* interface for exporting attributes */
@@ -83,8 +133,8 @@ struct reset_attribute {
 	struct attribute        attr;
 	ssize_t (*show)(struct kobject *kobj, struct attribute *attr,
 			char *buf);
-	size_t (*store)(struct kobject *kobj, struct attribute *attr,
-			const char *buf, size_t count);
+	ssize_t (*store)(struct kobject *kobj, struct attribute *attr,
+			 const char *buf, size_t count);
 };
 #define to_reset_attr(_attr) \
 	container_of(_attr, struct reset_attribute, attr)
@@ -95,20 +145,33 @@ struct reset_attribute {
 /* sysfs related globals */
 static ssize_t show_emmc_dload(struct kobject *kobj, struct attribute *attr,
 			       char *buf);
-static size_t store_emmc_dload(struct kobject *kobj, struct attribute *attr,
-			       const char *buf, size_t count);
+static ssize_t store_emmc_dload(struct kobject *kobj, struct attribute *attr,
+				const char *buf, size_t count);
 RESET_ATTR(emmc_dload, 0644, show_emmc_dload, store_emmc_dload);
+
+#ifdef CONFIG_QCOM_EDL_900E_ENTRY
+static ssize_t show_controlled_edl_900e(struct kobject *kobj,
+					struct attribute *attr, char *buf);
+static ssize_t store_controlled_edl_900e(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buf, size_t count);
+RESET_ATTR(controlled_edl_900e, 0600, show_controlled_edl_900e,
+	   store_controlled_edl_900e);
+#endif
 
 #ifdef CONFIG_QCOM_MINIDUMP
 static ssize_t show_dload_mode(struct kobject *kobj, struct attribute *attr,
 			       char *buf);
-static size_t store_dload_mode(struct kobject *kobj, struct attribute *attr,
-			       const char *buf, size_t count);
+static ssize_t store_dload_mode(struct kobject *kobj, struct attribute *attr,
+				const char *buf, size_t count);
 RESET_ATTR(dload_mode, 0644, show_dload_mode, store_dload_mode);
 #endif /* CONFIG_QCOM_MINIDUMP */
 
 static struct attribute *reset_attrs[] = {
 	&reset_attr_emmc_dload.attr,
+#ifdef CONFIG_QCOM_EDL_900E_ENTRY
+	&reset_attr_controlled_edl_900e.attr,
+#endif
 #ifdef CONFIG_QCOM_MINIDUMP
 	&reset_attr_dload_mode.attr,
 #endif
@@ -300,7 +363,7 @@ static void setup_dload_mode_support(void)
 	store_kaslr_offset();
 
 	dload_type_addr = map_prop_mem(IMEM_DL_TYPE_PROP);
-	if (!dload_type_addr)
+	if (!dload_type_addr && !IS_ENABLED(CONFIG_QCOM_EDL_900E_ENTRY))
 		return;
 
 	ret = kobject_init_and_add(&dload_kobj, &reset_ktype,
@@ -315,7 +378,12 @@ static void setup_dload_mode_support(void)
 	if (ret) {
 		pr_err("%s:Error in creation sysfs_create_group\n", __func__);
 		kobject_del(&dload_kobj);
+		return;
 	}
+
+#ifdef CONFIG_QCOM_EDL_900E_ENTRY
+	dload_sysfs_ready = true;
+#endif
 }
 
 static ssize_t attr_show(struct kobject *kobj, struct attribute *attr,
@@ -359,7 +427,7 @@ static ssize_t show_emmc_dload(struct kobject *kobj, struct attribute *attr,
 	return snprintf(buf, sizeof(show_val), "%u\n", show_val);
 }
 
-static size_t store_emmc_dload(struct kobject *kobj, struct attribute *attr,
+static ssize_t store_emmc_dload(struct kobject *kobj, struct attribute *attr,
 				const char *buf, size_t count)
 {
 	uint32_t enabled;
@@ -383,6 +451,28 @@ static size_t store_emmc_dload(struct kobject *kobj, struct attribute *attr,
 	return count;
 }
 
+#ifdef CONFIG_QCOM_EDL_900E_ENTRY
+static ssize_t show_controlled_edl_900e(struct kobject *kobj,
+					struct attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%s\n",
+			 qcom_edl_900e_state_name());
+}
+
+static ssize_t store_controlled_edl_900e(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buf, size_t count)
+{
+	if (!sysfs_streq(buf, "disarm"))
+		return -EINVAL;
+
+	if (!qcom_edl_900e_disarm())
+		return -EBUSY;
+
+	return count;
+}
+#endif
+
 #ifdef CONFIG_QCOM_MINIDUMP
 static DEFINE_MUTEX(tcsr_lock);
 
@@ -394,7 +484,7 @@ static ssize_t show_dload_mode(struct kobject *kobj, struct attribute *attr,
 		((dload_type == SCM_DLOAD_MINIDUMP) ? "mini" : "full"));
 }
 
-static size_t store_dload_mode(struct kobject *kobj, struct attribute *attr,
+static ssize_t store_dload_mode(struct kobject *kobj, struct attribute *attr,
 				const char *buf, size_t count)
 {
 	if (sysfs_streq(buf, "full")) {
@@ -693,6 +783,18 @@ static int msm_restart_probe(struct platform_device *pdev)
 						"qcom,force-warm-reboot");
 	if (force_warm_reboot)
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+
+#ifdef CONFIG_QCOM_WARM_REBOOT_EDL_900E_ENTRY
+	msm_restart_ready = true;
+	dev_info(dev, "qcom-edl-900e: warm-reboot interceptor ready, force-warm=%d\n",
+		 force_warm_reboot);
+#elif defined(CONFIG_QCOM_EDL_900E_ENTRY)
+	/* Arm only after the panic and emergency-download paths are ready. */
+	if (!dload_sysfs_ready)
+		dev_err(dev, "qcom-edl-900e: disarm interface unavailable; not arming\n");
+	else if (!qcom_edl_900e_arm())
+		dev_err(dev, "qcom-edl-900e: failed to arm controlled entry\n");
+#endif
 
 	return 0;
 

@@ -17,6 +17,10 @@
 #include <linux/syscore_ops.h>
 #include <linux/uaccess.h>
 
+#ifdef CONFIG_QCOM_WARM_REBOOT_EDL_900E_ENTRY
+#include <soc/qcom/restart.h>
+#endif
+
 /*
  * this indicates whether you can reboot with ctrl-alt-del: the default is yes
  */
@@ -241,6 +245,11 @@ void migrate_to_reboot_cpu(void)
  */
 void kernel_restart(char *cmd)
 {
+#ifdef CONFIG_QCOM_WARM_REBOOT_EDL_900E_ENTRY
+	/* Intercept while CPUs, IRQs, devices, and workqueues are still live. */
+	qcom_warm_reboot_900e_maybe_intercept(cmd);
+#endif
+
 	kernel_restart_prepare(cmd);
 	migrate_to_reboot_cpu();
 	syscore_shutdown();

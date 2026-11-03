@@ -1018,6 +1018,50 @@ config PANIC_TIMEOUT
 	  value n > 0 will wait n seconds before rebooting, while a timeout
 	  value n < 0 will reboot immediately.
 
+config QCOM_EDL_900E_ENTRY
+	bool "Controlled QCOM EDL (900E) entry for init-loop recovery"
+	depends on ARCH_QCOM
+	default n
+	help
+	  Register a one-shot softirq at softirq_init(), then arm it when the
+	  QCOM restart driver has installed the panic and emergency-download
+	  paths. Arming queues delayed work for a fixed eight minutes, then raises
+	  the softirq to crash by
+	  dereferencing a global object that was freed without being cleared.
+	  Writing "disarm" to /sys/kernel/dload/controlled_edl_900e cancels the
+	  pending endpoint before it commits to the fault. Because
+	  a fault in softirq context is in_interrupt(), the kernel forces a
+	  panic regardless of panic_on_oops; the QCOM panic path then arms the
+	  download-mode cookie and warm-resets into Emergency Download mode,
+	  which enumerates as Qualcomm USB PID 900E.
+
+	  This exists only to escape an init boot loop during bring-up: it
+	  drops a device that cannot finish init into EDL after the delay so
+	  it can be reflashed instead of looping forever. It deliberately
+	  crashes the kernel after the delay and must never be enabled in a
+	  production build.
+
+	  If unsure, say N.
+
+config QCOM_WARM_REBOOT_EDL_900E_ENTRY
+	bool "Arm controlled QCOM EDL (900E) entry on warm reboot"
+	depends on QCOM_EDL_900E_ENTRY && POWER_RESET_QCOM
+	default n
+	help
+	  Replace the controlled EDL timer's probe-time trigger with an early
+	  intercept of an ordinary Android or TWRP warm-reboot request. The
+	  intercept runs at the start of kernel_restart(), before reboot
+	  notifiers and device shutdown, while the timer's workqueue and the
+	  QCOM panic and emergency-download paths remain available.
+
+	  This target recognizes the empty TWRP reboot target and Android's
+	  "shell" target. It leaves named reboot targets, download mode, panic,
+	  and kernel-internal restarts unchanged. The normal restart path is
+	  parked after the timer is armed, with a bounded direct-panic backstop.
+
+	  This deliberately crashes the kernel and is only for controlled
+	  bring-up recovery. If unsure, say N.
+
 config SCHED_DEBUG
 	bool "Collect scheduler debugging info"
 	depends on DEBUG_KERNEL && PROC_FS
