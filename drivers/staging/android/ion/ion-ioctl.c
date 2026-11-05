@@ -8,6 +8,7 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/dma-buf.h>
+#include <asm/cacheflush.h>
 
 #include "ion.h"
 #include "ion_system_secure_heap.h"
@@ -63,23 +64,65 @@ static unsigned int ion_ioctl_dir(unsigned int cmd)
 }
 
 #ifdef CONFIG_ION_LEGACY
+static void ion_legacy_cache_range(unsigned int cmd, void *start, void *end)
+{
+	switch (cmd) {
+	case ION_IOC_CLEAN_CACHES:
+		dmac_clean_range(start, end);
+		break;
+	case ION_IOC_INV_CACHES:
+		dmac_inv_range(start, end);
+		break;
+	default:
+		dmac_flush_range(start, end);
+	}
+}
+
+/*
+ * Same walk as the 4.4 msm ion_pages_cache_ops(): maintain the kernel
+ * mapping of each page of the buffer, without the dma-buf CPU access path.
+ */
+static void ion_legacy_pages_cache_ops(struct ion_buffer *buffer,
+				       unsigned int cmd, unsigned int offset,
+				       unsigned int length)
+{
+	struct scatterlist *sg;
+	unsigned int len = 0;
+	int i;
+
+	for_each_sg(buffer->sg_table->sgl, sg, buffer->sg_table->nents, i) {
+		unsigned int sg_offset, sg_left, size;
+		void *vaddr;
+
+		len += sg->length;
+		if (len <= offset)
+			continue;
+
+		sg_left = len - offset;
+		sg_offset = sg->length - sg_left;
+		size = (length < sg_left) ? length : sg_left;
+
+		vaddr = page_address(sg_page(sg)) + sg_offset;
+		ion_legacy_cache_range(cmd, vaddr, vaddr + size);
+
+		offset += size;
+		length -= size;
+		if (length == 0)
+			break;
+	}
+}
+
 long ion_legacy_cache_ioctl(unsigned int cmd, ion_user_handle_t handle,
 			    int fd, unsigned int offset, unsigned int length)
 {
 	struct dma_buf *dmabuf;
-	enum dma_data_direction direction;
-	int buffer_fd = fd >= 0 ? fd : handle;
-	int ret;
+	struct ion_buffer *buffer;
+	int buffer_fd = handle > 0 ? handle : fd;
 
 	switch (cmd) {
 	case ION_IOC_CLEAN_CACHES:
-		direction = DMA_TO_DEVICE;
-		break;
 	case ION_IOC_INV_CACHES:
-		direction = DMA_FROM_DEVICE;
-		break;
 	case ION_IOC_CLEAN_INV_CACHES:
-		direction = DMA_BIDIRECTIONAL;
 		break;
 	default:
 		return -ENOTTY;
@@ -89,19 +132,14 @@ long ion_legacy_cache_ioctl(unsigned int cmd, ion_user_handle_t handle,
 	if (IS_ERR(dmabuf))
 		return PTR_ERR(dmabuf);
 
-	if (offset > dmabuf->size || length > dmabuf->size - offset) {
-		ret = -EINVAL;
-		goto out;
-	}
+	buffer = dmabuf->priv;
+	mutex_lock(&buffer->lock);
+	if ((buffer->flags & ION_FLAG_CACHED) && buffer->sg_table)
+		ion_legacy_pages_cache_ops(buffer, cmd, offset, length);
+	mutex_unlock(&buffer->lock);
 
-	ret = dma_buf_begin_cpu_access_partial(dmabuf, direction, offset,
-					       length);
-	if (!ret)
-		ret = dma_buf_end_cpu_access_partial(dmabuf, direction, offset,
-						     length);
-out:
 	dma_buf_put(dmabuf);
-	return ret;
+	return 0;
 }
 
 static long ion_legacy_custom_ioctl(const struct ion_custom_data *custom)
@@ -121,12 +159,8 @@ static long ion_legacy_custom_ioctl(const struct ion_custom_data *custom)
 			   sizeof(flush_data)))
 		return -EFAULT;
 
-	/*
-	 * The legacy handle is the dmabuf fd. Callers do not fill in
-	 * flush_data.fd, so it must not be used to pick the buffer.
-	 */
 	return ion_legacy_cache_ioctl(custom->cmd, flush_data.handle,
-				      -1, flush_data.offset,
+				      flush_data.fd, flush_data.offset,
 				      flush_data.length);
 }
 #endif
