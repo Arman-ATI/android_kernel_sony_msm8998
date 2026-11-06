@@ -1981,10 +1981,76 @@ static ssize_t qpnp_flash_led_max_current_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%d\n", max_current);
 }
 
+/* sysfs show function for flash_led_fault_status */
+static ssize_t qpnp_flash_led_fault_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct flash_switch_data *snode;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	struct qpnp_flash_led *led;
+	int rc;
+	uint val;
+
+	snode = container_of(led_cdev, struct flash_switch_data, cdev);
+	led = dev_get_drvdata(&snode->pdev->dev);
+
+	rc = regmap_read(led->regmap,
+			FLASH_LED_REG_LED_STATUS1(led->base), &val);
+	if (rc) {
+		pr_err("Unable to read fault status rc(%d)\n", rc);
+		return rc;
+	}
+	return scnprintf(buf, PAGE_SIZE, "%d\n", val);
+}
+
 /* sysfs attributes exported by flash_led */
 static struct device_attribute qpnp_flash_led_attrs[] = {
 	__ATTR(max_current, 0664, qpnp_flash_led_max_current_show, NULL),
 	__ATTR(enable, 0664, NULL, qpnp_flash_led_prepare_store),
+	__ATTR(fault_status, S_IRUSR | S_IRGRP,
+				qpnp_flash_led_fault_status_show, NULL),
+};
+
+/* sysfs show function for flash ires_ua */
+static ssize_t qpnp_flash_led_ires_ua_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct flash_node_data *flash_node;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+
+	flash_node = container_of(led_cdev, struct flash_node_data, cdev);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", flash_node->ires_ua);
+}
+
+/* sysfs store function for flash ires_ua */
+static ssize_t qpnp_flash_led_ires_ua_store(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	struct flash_node_data *flash_node;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	ssize_t ret;
+	unsigned long state;
+
+	flash_node = container_of(led_cdev, struct flash_node_data, cdev);
+
+	ret = kstrtoul(buf, 10, &state);
+	if (ret)
+		return ret;
+
+	flash_node->default_ires_ua = flash_node->ires_ua = state;
+	flash_node->default_ires_idx = flash_node->ires_idx = FLASH_LED_IRES_BASE -
+			(flash_node->ires_ua - FLASH_LED_IRES_MIN_UA) / FLASH_LED_IRES_DIVISOR;
+
+	return count;
+}
+
+/* sysfs attributes exported by flash_node (torch/flash) */
+static struct device_attribute qpnp_flash_fnode_attrs[] = {
+	__ATTR(ires_ua, (S_IRUGO | S_IWUSR | S_IWGRP),
+				qpnp_flash_led_ires_ua_show,
+				qpnp_flash_led_ires_ua_store),
 };
 
 /* irq handler */
@@ -2153,7 +2219,7 @@ static int qpnp_flash_led_parse_strobe_sel_dt(struct qpnp_flash_led *led,
 						"qcom,hw-strobe-edge-trigger");
 		active_high = !of_property_read_bool(node,
 						"qcom,hw-strobe-active-low");
-		hw_strobe = 1;
+		hw_strobe = !of_property_read_bool(node, "somc,sw-strobe-init");
 	} else if (fnode->strobe_sel == LPG_STROBE) {
 		/* LPG strobe requires level trigger and active high */
 		edge_trigger = 0;
@@ -2322,6 +2388,16 @@ static int qpnp_flash_led_parse_each_led_dt(struct qpnp_flash_led *led,
 	}
 
 	fnode->cdev.dev->of_node = node;
+
+	rc = sysfs_create_file(&fnode->cdev.dev->kobj,
+				&qpnp_flash_fnode_attrs[0].attr);
+	if (rc < 0) {
+		pr_err("Unable to create ires_ua for led node %d, rc=%d\n",
+			fnode->id, rc);
+		led_classdev_unregister(&fnode->cdev);
+		return rc;
+	}
+
 	fnode->strobe_pinctrl = devm_pinctrl_get(fnode->cdev.dev);
 	if (IS_ERR_OR_NULL(fnode->strobe_pinctrl)) {
 		pr_debug("No pinctrl defined for %s, err=%ld\n",
