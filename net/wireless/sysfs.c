@@ -106,10 +106,13 @@ static int wiphy_suspend(struct device *dev)
 
 	rtnl_lock();
 	if (rdev->wiphy.registered) {
-		if (!rdev->wiphy.wowlan_config) {
-			cfg80211_leave_all(rdev);
-			cfg80211_process_rdev_events(rdev);
-		}
+		/*
+		 * Do not leave all interfaces here when no WoWLAN config is
+		 * set (the upstream "disconnect on suspend" behaviour, which
+		 * the 4.4 kernel did not have). The WLAN driver handles
+		 * suspend itself through WoW, and disconnecting here leaves a
+		 * vdev stop pending, which aborts the system suspend.
+		 */
 		if (rdev->ops->suspend)
 			ret = rdev_suspend(rdev, rdev->wiphy.wowlan_config);
 		if (ret == 1) {
