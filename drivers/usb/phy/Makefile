@@ -29,3 +29,4 @@ obj-$(CONFIG_MSM_QUSB_PHY)		+= phy-msm-qusb.o phy-msm-qusb-v2.o
 obj-$(CONFIG_USB_MSM_SSPHY_QMP)     	+= phy-msm-ssusb-qmp.o
 obj-$(CONFIG_MSM_HSUSB_PHY)		+= phy-msm-snps-hs.o
 obj-$(CONFIG_USB_MSM_OTG)               += phy-msm-usb.o
+obj-$(CONFIG_DUAL_ROLE_USB_INTF)	+= class-dual-role.o
