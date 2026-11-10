@@ -39,7 +39,7 @@
 			pinctrl-1 = <&msm_gpio_92>;
 
 			/* Defined in Clock Distribution */
-			clocks = <&clock_gcc clk_ln_bb_clk3_pin>;
+			clocks = <&clock_rpmcc RPM_SMD_LN_BB_CLK3_PIN>;
 			clock-names = "felica_clk";
 		};
 	};
