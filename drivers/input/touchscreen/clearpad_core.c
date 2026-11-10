@@ -8625,6 +8625,8 @@ end:
 	return rc;
 }
 
+#endif /* CONFIG_DEBUG_FS */
+
 /* for Bootloader v6.0 */
 /* need LOCK(&this->lock) */
 static int clearpad_read_pca_block_bl_v6_0(struct clearpad_t *this,
@@ -9059,6 +9061,7 @@ static int clearpad_write_pca_block(struct clearpad_t *this,
 	return rc;
 }
 
+#ifdef CONFIG_DEBUG_FS
 static long clearpad_debug_pca_ioctl(struct file *file,
 					unsigned int cmd, unsigned long arg)
 {
